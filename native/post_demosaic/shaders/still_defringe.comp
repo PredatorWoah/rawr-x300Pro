@@ -1,0 +1,71 @@
+#version 450
+// Axial purple-fringe desaturation (linear camera RGB, post-FCC, pre-tonemap).
+//
+// Lateral CA displaces channels (fixable by resampling); axial CA deposits
+// extra purple light on edges (fixable only by desaturation). This stage does
+// the latter: pixels whose min(R,B) far exceeds G near a bright edge are
+// pulled toward their luminance. Wide purple areas (real purple objects)
+// survive via the narrowness gate: the 5x5-averaged excess stays high there.
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(binding = 0, rgba16f) uniform readonly image2D srcImage;
+layout(binding = 1, rgba16f) uniform writeonly image2D dstImage;
+layout(push_constant) uniform Pc {
+    uint width;
+    uint height;
+    float strength;
+    float edgeThreshold;
+    float lumaFloor;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+}
+pc;
+
+float Yof(vec3 c) { return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b; }
+
+// The 9x9 excess average reads a 24x24 tile of per-pixel excess from shared
+// memory instead of 81 image loads per pixel. Sums run in the same dy/dx
+// order as the direct loop, so the result is unchanged.
+const int kRadius = 4;
+const int kTile = 16 + 2 * kRadius;
+shared float excess[kTile * kTile];
+
+void main() {
+    const ivec2 origin = ivec2(gl_WorkGroupID.xy) * 16 - kRadius;
+    const ivec2 maxCoord = ivec2(int(pc.width) - 1, int(pc.height) - 1);
+    for (uint i = gl_LocalInvocationIndex; i < uint(kTile * kTile); i += 256u) {
+        ivec2 q = clamp(origin + ivec2(int(i) % kTile, int(i) / kTile), ivec2(0), maxCoord);
+        vec3 n = imageLoad(srcImage, q).rgb;
+        excess[i] = min(n.r, n.b) - n.g;
+    }
+    barrier();
+
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (uint(p.x) >= pc.width || uint(p.y) >= pc.height) return;
+    vec4 s = imageLoad(srcImage, p);
+    vec3 v = s.rgb;
+    if (any(isnan(v)) || any(isinf(v))) {
+        imageStore(dstImage, p, s);
+        return;
+    }
+    float Y = Yof(v);
+    float e = min(v.r, v.b) - v.g;
+    // Both gates are exactly zero here, so the weight is zero: most pixels
+    // are not purple and skip the average.
+    if (e <= pc.edgeThreshold || Y <= pc.lumaFloor) {
+        imageStore(dstImage, p, s);
+        return;
+    }
+    // 9x9-averaged excess: narrow spikes (fringe, incl. soft 2-3px axial
+    // haze) keep e >> E; wide purple areas have e ~= E and are preserved.
+    const ivec2 local = ivec2(gl_LocalInvocationID.xy);
+    float acc = 0.0;
+    for (int dy = 0; dy <= 2 * kRadius; ++dy)
+        for (int dx = 0; dx <= 2 * kRadius; ++dx) acc += excess[(local.y + dy) * kTile + local.x + dx];
+    float E = acc / 81.0;
+    float narrow = clamp((e - E) / max(e, 1e-4), 0.0, 1.0);
+    float w = pc.strength * narrow * smoothstep(pc.edgeThreshold, pc.edgeThreshold * 2.0, e) *
+              smoothstep(pc.lumaFloor, pc.lumaFloor * 2.0, Y);
+    // Mix toward Y preserves luminance exactly (Y' = Y).
+    imageStore(dstImage, p, vec4(mix(v, vec3(Y), clamp(w, 0.0, 1.0)), s.a));
+}

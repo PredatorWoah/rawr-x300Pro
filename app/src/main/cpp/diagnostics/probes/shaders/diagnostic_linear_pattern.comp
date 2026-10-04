@@ -1,0 +1,22 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0, rgba16f) uniform writeonly image2D outImage;
+layout(push_constant) uniform PC {
+    uint width;
+    uint height;
+}
+pc;
+void main() {
+    uvec2 p = gl_GlobalInvocationID.xy;
+    if (p.x >= pc.width || p.y >= pc.height) return;
+    vec2 uv = (vec2(p) + vec2(0.5)) / vec2(pc.width, pc.height);
+    uint gx = (p.x * 8u) / max(pc.width, 1u);
+    uint gy = (p.y * 8u) / max(pc.height, 1u);
+    float grid = ((gx + gy) & 1u) == 0u ? 0.08 : 0.20;
+    vec3 c = vec3(0.03 + 0.42 * uv.x, 0.03 + 0.42 * uv.y, grid);
+    if (p.x < pc.width / 16u) c = vec3(0.45, 0.03, 0.03);
+    if (p.y < pc.height / 16u) c = vec3(0.03, 0.45, 0.03);
+    if (p.x >= pc.width - pc.width / 16u) c = vec3(0.03, 0.03, 0.45);
+    if (p.y >= pc.height - pc.height / 16u) c = vec3(0.42, 0.42, 0.03);
+    imageStore(outImage, ivec2(p), vec4(c, 1.0));
+}

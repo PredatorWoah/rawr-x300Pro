@@ -1,0 +1,76 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Colour-propagation seed: one guide cell per 4 (preview) or 8 (still) working
+// pixels. Only bright, unclipped, locally smooth pixels may describe
+// highlight colour; dark edges and silhouettes cannot seed it.
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(binding = 0, rgba16f) uniform readonly image2D rgbImage;
+layout(binding = 1, r16ui) uniform readonly uimage2D clipStateImage;
+layout(binding = 2, rgba16f) uniform writeonly image2D guideImage;
+layout(push_constant) uniform Pc {
+    uint width;
+    uint height;
+    uint guideWidth;
+    uint guideHeight;
+    vec4 channelCeilings;
+}
+pc;
+
+#include "raw_highlight_post_rgb.glsl"
+#if !defined(RAWR_HL_SCALE) || (RAWR_HL_SCALE != 1 && RAWR_HL_SCALE != 2)
+#error "RAWR_HL_SCALE must be 1 (preview) or 2 (still)"
+#endif
+const int kStep = RAWR_HL_SCALE;
+
+uint clipState(ivec2 p) {
+#if RAWR_HL_SCALE == 1
+    return imageLoad(clipStateImage, clamp(p, ivec2(0), ivec2(pc.width, pc.height) - ivec2(1))).r & 15u;
+#else
+    ivec2 stateExtent = imageSize(clipStateImage);
+    return imageLoad(clipStateImage, clamp(p >> 1, ivec2(0), stateExtent - ivec2(1))).r & 15u;
+#endif
+}
+bool fullyValid(ivec2 p) { return clipState(p) == 0u; }
+
+void main() {
+    ivec2 g = ivec2(gl_GlobalInvocationID.xy);
+    if (g.x >= int(pc.guideWidth) || g.y >= int(pc.guideHeight)) return;
+    ivec2 extent = ivec2(pc.width, pc.height);
+    ivec2 origin = g * (4 * kStep);
+    vec3 chromaSum = vec3(0.0);
+    float weightSum = 0.0;
+    vec3 observedSum = vec3(0.0);
+    // Sixteen spatially distributed samples per cell.
+    for (int y = kStep - 1; y < 4 * kStep; y += kStep) {
+        for (int x = kStep - 1; x < 4 * kStep; x += kStep) {
+            ivec2 p = clamp(origin + ivec2(x, y), ivec2(0), extent - ivec2(1));
+            uint state = clipState(p);
+            vec3 rgb = rawrHighlightSanitize(imageLoad(rgbImage, p).rgb);
+            observedSum += rgb;
+            if (state != 0u) continue;
+            ivec2 px0 = clamp(p - ivec2(kStep, 0), ivec2(0), extent - ivec2(1));
+            ivec2 px1 = clamp(p + ivec2(kStep, 0), ivec2(0), extent - ivec2(1));
+            ivec2 py0 = clamp(p - ivec2(0, kStep), ivec2(0), extent - ivec2(1));
+            ivec2 py1 = clamp(p + ivec2(0, kStep), ivec2(0), extent - ivec2(1));
+            if (!fullyValid(px0) || !fullyValid(px1) || !fullyValid(py0) || !fullyValid(py1)) continue;
+            float sum = rawrHighlightSum(rgb);
+            if (sum <= 1e-6) continue;
+            float peak = rawrHighlightMaximum(rgb / max(pc.channelCeilings.rgb, vec3(1e-4)));
+            if (peak < 0.52 || peak > 1.02) continue;
+            vec3 dx = imageLoad(rgbImage, px1).rgb - imageLoad(rgbImage, px0).rgb;
+            vec3 dy = imageLoad(rgbImage, py1).rgb - imageLoad(rgbImage, py0).rgb;
+            float variation = max(rawrHighlightMaximum(abs(dx)), rawrHighlightMaximum(abs(dy))) / sum;
+            if (variation > 0.10) continue;
+            float w = smoothstep(0.52, 0.78, peak) * (1.0 / (1.0 + 24.0 * variation));
+            chromaSum += (rgb / sum) * w;
+            weightSum += w;
+        }
+    }
+    vec3 chroma = weightSum > 1e-6 ? chromaSum / weightSum : vec3(0.0);
+    float observedPeak = rawrHighlightMaximum(observedSum / 16.0);
+    // Negative alpha marks an authoritative chroma seed while also carrying a
+    // low-resolution brightness field. This field suppresses high-frequency
+    // false texture without flattening broad cloud structure.
+    float alpha = weightSum > 1e-6 ? -(1.0 + observedPeak) : observedPeak;
+    imageStore(guideImage, g, vec4(chroma, alpha));
+}

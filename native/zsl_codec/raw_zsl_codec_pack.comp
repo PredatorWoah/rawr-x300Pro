@@ -1,0 +1,52 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(set = 0, binding = 0, r16ui) uniform readonly uimage2D srcRaw;
+layout(set = 0, binding = 1, std430) readonly buffer MetaBuf { uint meta[]; }
+META;
+layout(set = 0, binding = 2, std430) readonly buffer SizeBuf { uint sizes[]; }
+SIZES;
+layout(set = 0, binding = 3, std430) writeonly buffer PayloadBuf { uint payload[]; }
+PAY;
+layout(set = 0, binding = 5, std430) writeonly buffer OffsetBuf { uint offsets[]; }
+OFFSETS;
+layout(set = 0, binding = 6, std430) buffer AllocBuf { uint nextWord; }
+ALLOC;
+layout(push_constant) uniform PC { uint width, height, tilesX, tilesY, slotWords; }
+pc;
+shared uint streamBase[4];
+uint residual(uint x0, uint y0, uint p, uint si, uint mn, uint validW) {
+    uint sx = si % validW, sy = si / validW, px = p & 1u, py = p >> 1u;
+    return imageLoad(srcRaw, ivec2(x0 + sx * 2u + px, y0 + sy * 2u + py)).r - mn;
+}
+uint packWord(uint x0, uint y0, uint p, uint mn, uint bits, uint wi, uint count, uint validW) {
+    if (bits == 0u) return 0u;
+    uint bit0 = wi * 32u, first = bit0 / bits, srcBit = bit0 - first * bits, packed = 0u, dst = 0u, s = first;
+    while (dst < 32u && s < count) {
+        uint r = residual(x0, y0, p, s, mn, validW), avail = bits - srcBit, take = min(avail, 32u - dst);
+        uint mask = (take == 32u) ? 0xffffffffu : ((1u << take) - 1u);
+        packed |= ((r >> srcBit) & mask) << dst;
+        dst += take;
+        ++s;
+        srcBit = 0u;
+    }
+    return packed;
+}
+void main() {
+    uint tile = gl_WorkGroupID.x;
+    if (tile >= pc.tilesX * pc.tilesY) return;
+    uint lid = gl_LocalInvocationID.x, p = lid >> 4u, lane = lid & 15u, stream = tile * 4u + p, m = META.meta[stream],
+         mn = m & 0xffffu, bits = (m >> 16u) & 31u, used = SIZES.sizes[stream];
+    if (lane == 0u) {
+        uint base = atomicAdd(ALLOC.nextWord, used);
+        streamBase[p] = base;
+        OFFSETS.offsets[stream] = base;
+    }
+    barrier();
+    if (bits == 0u || used == 0u) return;
+    uint tx = tile % pc.tilesX, ty = tile / pc.tilesX, x0 = tx * 32u, y0 = ty * 32u, px = p & 1u, py = p >> 1u;
+    uint validW = (x0 + px < pc.width) ? ((min(x0 + 32u, pc.width) - x0 - px + 1u) >> 1u) : 0u;
+    uint validH = (y0 + py < pc.height) ? ((min(y0 + 32u, pc.height) - y0 - py + 1u) >> 1u) : 0u;
+    uint count = validW * validH, base = streamBase[p];
+    for (uint wi = lane; wi < used; wi += 16u)
+        PAY.payload[base + wi] = packWord(x0, y0, p, mn, bits, wi, count, validW);
+}

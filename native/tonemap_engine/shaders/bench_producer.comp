@@ -1,0 +1,34 @@
+#version 450
+
+#ifndef LOCAL_X
+#define LOCAL_X 8
+#endif
+#ifndef LOCAL_Y
+#define LOCAL_Y 16
+#endif
+
+layout(local_size_x = LOCAL_X, local_size_y = LOCAL_Y, local_size_z = 1) in;
+layout(binding = 0, rgba16f) uniform writeonly image2D outImage;
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 sz = imageSize(outImage);
+    if (p.x >= sz.x || p.y >= sz.y) return;
+    vec2 uv = vec2(p) / vec2(max(sz - ivec2(1), ivec2(1)));
+    float e = 0.18 * exp2(-4.0 + 8.0 * uv.x);
+    uint band = uint(p.y) * 6u / uint(max(sz.y, 1));
+    vec3 rgb;
+    if (band == 0u)
+        rgb = vec3(e);
+    else if (band == 1u)
+        rgb = vec3(e, 0.35 * e, 0.05 * e);
+    else if (band == 2u)
+        rgb = vec3(0.05 * e, 0.8 * e, e);
+    else if (band == 3u)
+        rgb = vec3(e, 0.05 * e, 0.8 * e);
+    else if (band == 4u)
+        rgb = vec3(0.8 * e, 0.45 * e, 0.25 * e);
+    else
+        rgb = vec3((0.2 + 0.8 * uv.y) * e, (1.0 - 0.7 * uv.y) * e, 0.05 * e);
+    imageStore(outImage, p, vec4(rgb, 1.0));
+}

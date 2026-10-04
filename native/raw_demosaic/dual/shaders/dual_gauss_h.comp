@@ -1,0 +1,68 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(binding = 3, r32f) uniform readonly image2D srcMask;
+layout(binding = 4, r32f) uniform coherent image2D tmpMask;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    float threshold;
+    float outputFactor;
+    float outputAlpha;
+    float b1;
+    float b2;
+    float b3;
+    float B;
+    float m00;
+    float m01;
+    float m02;
+    float m10;
+    float m11;
+    float m12;
+    float m20;
+    float m21;
+    float m22;
+}
+pc;
+void main() {
+    uint y = gl_GlobalInvocationID.x;
+    if (y >= pc.height) return;
+    int W = int(pc.width);
+    int yy = int(y);
+    float s0 = imageLoad(srcMask, ivec2(0, yy)).r;
+    float t0 = s0 * (pc.B + pc.b1 + pc.b2 + pc.b3);
+    imageStore(tmpMask, ivec2(0, yy), vec4(t0));
+    float s1 = imageLoad(srcMask, ivec2(1, yy)).r;
+    float t1 = pc.B * s1 + pc.b1 * t0 + s0 * (pc.b2 + pc.b3);
+    imageStore(tmpMask, ivec2(1, yy), vec4(t1));
+    float s2 = imageLoad(srcMask, ivec2(2, yy)).r;
+    float t2 = pc.B * s2 + pc.b1 * t1 + pc.b2 * t0 + pc.b3 * s0;
+    imageStore(tmpMask, ivec2(2, yy), vec4(t2));
+    float tm3 = t0, tm2 = t1, t = t2;
+    for (int x = 3; x < W; ++x) {
+        float n = pc.B * imageLoad(srcMask, ivec2(x, yy)).r + pc.b1 * t + pc.b2 * tm2 + pc.b3 * tm3;
+        imageStore(tmpMask, ivec2(x, yy), vec4(n));
+        tm3 = tm2;
+        tm2 = t;
+        t = n;
+    }
+    memoryBarrierImage();
+    float edge = imageLoad(srcMask, ivec2(W - 1, yy)).r;
+    float a = imageLoad(tmpMask, ivec2(W - 1, yy)).r - edge, b = imageLoad(tmpMask, ivec2(W - 2, yy)).r - edge,
+          c = imageLoad(tmpMask, ivec2(W - 3, yy)).r - edge;
+    float wm1 = edge + pc.m00 * a + pc.m01 * b + pc.m02 * c;
+    float w = edge + pc.m10 * a + pc.m11 * b + pc.m12 * c;
+    float wp1 = edge + pc.m20 * a + pc.m21 * b + pc.m22 * c;
+    imageStore(tmpMask, ivec2(W - 1, yy), vec4(wm1));
+    float x2 = pc.B * imageLoad(tmpMask, ivec2(W - 2, yy)).r + pc.b1 * wm1 + pc.b2 * w + pc.b3 * wp1;
+    imageStore(tmpMask, ivec2(W - 2, yy), vec4(x2));
+    float x3 = pc.B * imageLoad(tmpMask, ivec2(W - 3, yy)).r + pc.b1 * x2 + pc.b2 * wm1 + pc.b3 * w;
+    imageStore(tmpMask, ivec2(W - 3, yy), vec4(x3));
+    float p1 = x3, p2 = x2, p3 = wm1;
+    for (int x = W - 4; x >= 0; --x) {
+        float n = pc.B * imageLoad(tmpMask, ivec2(x, yy)).r + pc.b1 * p1 + pc.b2 * p2 + pc.b3 * p3;
+        imageStore(tmpMask, ivec2(x, yy), vec4(n));
+        p3 = p2;
+        p2 = p1;
+        p1 = n;
+    }
+}

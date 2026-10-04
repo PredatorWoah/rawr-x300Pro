@@ -1,0 +1,89 @@
+#version 450
+// RawTherapee autoContrast coarse selection. Phase 0 selects the 80x80 pass and
+// decides whether pass 1 is necessary. Phase 1 selects the 40x40/10px grid.
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(binding = 4, r32f) uniform readonly image2D statsIn;
+layout(std430, binding = 5) buffer AutoState {
+    float resolvedThreshold;
+    float minVariance80;
+    float minVariance40;
+    float refinedVariance;
+    uint chosenPass;
+    uint tileX;
+    uint tileY;
+    uint tileSize;
+}
+state;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    float threshold;
+    float outputFactor;
+    float outputAlpha;
+    float b1;
+    float b2;
+    float b3;
+    float B;
+    float m00;
+    float m01;
+    float m02;
+    float m10;
+    float m11;
+    float m12;
+    float m20;
+    float m21;
+    float m22;
+    uint autoContrast;
+    uint autoPass;
+}
+pc;
+const float INF = 3.402823466e+38;
+uint n80() { return (pc.width / 80u) * (pc.height / 80u); }
+float statAt(uint idx) { return imageLoad(statsIn, ivec2(int(idx % pc.width), int(idx / pc.width))).r; }
+void main() {
+    if (pc.autoPass == 0u) {
+        uint n80w = pc.width / 80u, n80h = pc.height / 80u;
+        float best80 = INF;
+        uint bi80 = 0u;
+        for (uint i = 0u; i < n80w * n80h; ++i) {
+            float v = statAt(i);
+            if (v < best80) {
+                best80 = v;
+                bi80 = i;
+            }
+        }
+        state.minVariance80 = best80;
+        state.minVariance40 = INF;
+        state.refinedVariance = INF;
+        state.resolvedThreshold = 0.0;
+        if (best80 <= 1.0) {
+            state.chosenPass = 0u;
+            state.tileSize = 80u;
+            state.tileX = (bi80 % n80w) * 80u;
+            state.tileY = (bi80 / n80w) * 80u;
+        } else {
+            // Mark pass 1 necessary. The following 40x40 tile shader can return immediately
+            // when chosenPass remains zero, avoiding RT's expensive second pass in the common case.
+            state.chosenPass = 1u;
+            state.tileSize = 40u;
+            state.tileX = 0u;
+            state.tileY = 0u;
+        }
+        return;
+    }
+    if (state.chosenPass == 0u) return;
+    uint n40w = pc.width / 10u - 3u, n40h = pc.height / 10u - 3u, base = n80();
+    float best40 = INF;
+    uint bi40 = 0u;
+    for (uint i = 0u; i < n40w * n40h; ++i) {
+        float v = statAt(base + i);
+        if (v < best40) {
+            best40 = v;
+            bi40 = i;
+        }
+    }
+    state.minVariance40 = best40;
+    state.tileSize = 40u;
+    state.tileX = (bi40 % n40w) * 10u;
+    state.tileY = (bi40 / n40w) * 10u;
+}

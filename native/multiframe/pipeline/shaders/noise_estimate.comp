@@ -1,0 +1,64 @@
+#version 450
+
+// Burst noise estimation, block statistics pass. One workgroup owns a 32x32
+// RAW block (16x16 threads, one 2x2 CFA quad each) and accumulates, per CFA
+// site, the reference level and the reference-minus-neighbour difference of
+// two consecutive burst frames. Values are normalized like raw_normalize but
+// NOT clipped at black, so the deep-shadow variance stays unbiased. The host
+// keeps the flattest/static blocks per brightness bin and fits
+// variance = slope * x + offset (BurstNoiseEstimate.cpp).
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(set = 0, binding = 0, r16ui) readonly uniform uimage2D referenceRaw;
+layout(set = 0, binding = 1, r16ui) readonly uniform uimage2D neighbourRaw;
+// Per block: 4 sites x (count, sumLevel, sumDiff, sumDiffSquared).
+layout(std430, set = 0, binding = 2) writeonly buffer Stats { float v[]; } stats;
+layout(push_constant) uniform P {
+    vec4 referenceBlack;
+    vec4 neighbourBlack;
+    float referenceWhite;
+    float neighbourWhite;
+    int width;
+    int height;
+    int blocksX;
+} p;
+
+shared float partial[16][256];
+
+void main() {
+    uint lane = gl_LocalInvocationIndex;
+    ivec2 quad = ivec2(gl_WorkGroupID.xy) * 16 + ivec2(gl_LocalInvocationID.xy);
+    ivec2 origin = quad * 2;
+    float sums[16];
+    for (int i = 0; i < 16; ++i) sums[i] = 0.0;
+    bool clipped = false;
+    if (origin.x + 1 < p.width && origin.y + 1 < p.height) {
+        for (int site = 0; site < 4; ++site) {
+            ivec2 q = origin + ivec2(site & 1, site >> 1);
+            float rawA = float(imageLoad(referenceRaw, q).x);
+            float rawB = float(imageLoad(neighbourRaw, q).x);
+            if (rawA >= 0.97 * p.referenceWhite || rawB >= 0.97 * p.neighbourWhite) clipped = true;
+            float a = (rawA - p.referenceBlack[site]) / max(1.0, p.referenceWhite - p.referenceBlack[site]);
+            float b = (rawB - p.neighbourBlack[site]) / max(1.0, p.neighbourWhite - p.neighbourBlack[site]);
+            float d = a - b;
+            sums[site * 4 + 0] = 1.0;
+            sums[site * 4 + 1] = a;
+            sums[site * 4 + 2] = d;
+            sums[site * 4 + 3] = d * d;
+        }
+    }
+    // A clipped quad poisons the whole block (its difference is not noise).
+    for (int i = 0; i < 16; ++i) partial[i][lane] = sums[i];
+    partial[0][lane] = clipped ? -1.0e9 : partial[0][lane];
+    barrier();
+    for (uint stride = 128u; stride > 0u; stride >>= 1u) {
+        if (lane < stride) {
+            for (int i = 0; i < 16; ++i) partial[i][lane] += partial[i][lane + stride];
+        }
+        barrier();
+    }
+    if (lane == 0u) {
+        uint base = (gl_WorkGroupID.y * uint(p.blocksX) + gl_WorkGroupID.x) * 16u;
+        bool blockClipped = partial[0][0] < 0.0;
+        for (int i = 0; i < 16; ++i) stats.v[base + uint(i)] = blockClipped ? 0.0 : partial[i][0];
+    }
+}

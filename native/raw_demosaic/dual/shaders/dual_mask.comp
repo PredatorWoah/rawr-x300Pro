@@ -1,0 +1,58 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(binding = 2, r32f) uniform readonly image2D lum;
+layout(binding = 3, r32f) uniform writeonly image2D maskOut;
+layout(std430, binding = 5) readonly buffer AutoState {
+    float resolvedThreshold;
+    float minVariance80;
+    float minVariance40;
+    float refinedVariance;
+    uint chosenPass;
+    uint tileX;
+    uint tileY;
+    uint tileSize;
+}
+state;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    float threshold;
+    float outputFactor;
+    float outputAlpha;
+    float b1;
+    float b2;
+    float b3;
+    float B;
+    float m00;
+    float m01;
+    float m02;
+    float m10;
+    float m11;
+    float m12;
+    float m20;
+    float m21;
+    float m22;
+    uint autoContrast;
+    uint autoPass;
+}
+pc;
+float sq(float x) { return x * x; }
+float blendFactor(float val, float threshold) {
+    float x = -16.0 + (16.0 / threshold) * val;
+    return 0.5 * (1.0 + x / sqrt(1.0 + x * x));
+}
+float L(ivec2 p) { return imageLoad(lum, p).r; }
+void main() {
+    ivec2 outp = ivec2(gl_GlobalInvocationID.xy);
+    if (outp.x >= int(pc.width) || outp.y >= int(pc.height)) return;
+    float threshold = pc.autoContrast != 0u ? state.resolvedThreshold : pc.threshold;
+    if (threshold == 0.0) {
+        imageStore(maskOut, outp, vec4(1, 0, 0, 0));
+        return;
+    }
+    ivec2 p = ivec2(clamp(outp.x, 2, int(pc.width) - 3), clamp(outp.y, 2, int(pc.height) - 3));
+    float c = sqrt(sq(L(p + ivec2(1, 0)) - L(p - ivec2(1, 0))) + sq(L(p + ivec2(0, 1)) - L(p - ivec2(0, 1))) +
+                   sq(L(p + ivec2(2, 0)) - L(p - ivec2(2, 0))) + sq(L(p + ivec2(0, 2)) - L(p - ivec2(0, 2)))) *
+              (0.0625 / 327.68);
+    imageStore(maskOut, outp, vec4(blendFactor(c, threshold), 0, 0, 0));
+}

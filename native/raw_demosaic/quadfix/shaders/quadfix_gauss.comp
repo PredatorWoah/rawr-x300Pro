@@ -1,0 +1,30 @@
+#version 450
+// Passes 4/5: separable coarse Gaussian (sigma 39.7887/8, radius 20,
+// QF_COARSE_W) over all 15 layers. H pass reads coarseArr, writes
+// coarseTmpArr; V pass reads coarseTmpArr, writes coarseArr.
+layout(local_size_x = QUADFIX_LOCAL_X, local_size_y = QUADFIX_LOCAL_Y, local_size_z = 1) in;
+#include "quadfix_common.glsl"
+
+void main() {
+    ivec2 c = ivec2(gl_GlobalInvocationID.xy);
+    int cw = (int(pc.width) >> 4);
+    int ch = (int(pc.height) >> 4);
+    if (c.x >= cw || c.y >= ch) return;
+    for (int l = 0; l < 15; ++l) {
+#ifdef QUADFIX_PASS_V
+        vec4 acc = vec4(0.0f);
+        for (int k = -QF_COARSE_R; k <= QF_COARSE_R; ++k) {
+            int y = clamp(c.y + k, 0, ch - 1);
+            acc += imageLoad(coarseTmpArr, ivec3(c.x, y, l)) * QF_COARSE_W[k + QF_COARSE_R];
+        }
+        imageStore(coarseArr, ivec3(c, l), acc);
+#else
+        vec4 acc = vec4(0.0f);
+        for (int k = -QF_COARSE_R; k <= QF_COARSE_R; ++k) {
+            int x = clamp(c.x + k, 0, cw - 1);
+            acc += imageLoad(coarseArr, ivec3(x, c.y, l)) * QF_COARSE_W[k + QF_COARSE_R];
+        }
+        imageStore(coarseTmpArr, ivec3(c, l), acc);
+#endif
+    }
+}

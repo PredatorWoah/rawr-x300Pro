@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+import struct,subprocess,sys,tempfile
+from pathlib import Path
+root=Path(__file__).resolve().parents[1]
+u=[0]*775;u[0]=0x564e4734
+with tempfile.NamedTemporaryFile() as f:
+    f.write(struct.pack("<775I",*u));f.flush()
+    p=subprocess.run([sys.executable,str(root/"tools/decode_gpu_diagnostic.py"),f.name,"--x","0","--y","0"],text=True,capture_output=True)
+    assert p.returncode==0,p.stderr
+    assert "VNG4_GPU_LINEAR_CANDIDATES " in p.stdout
+print("VNG4_EXTENDED_DIAGNOSTIC_775_PASS")

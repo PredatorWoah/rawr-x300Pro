@@ -1,0 +1,168 @@
+#version 450
+// One FCC step in a single dispatch: fcc_chroma_median.comp followed by
+// fcc_reconstruct.comp, with the median I/Q kept in shared memory instead of
+// the RG32F scratch image. Each 16x16 tile loads a 20x20 source window once,
+// computes the median for its 18x18 neighborhood and reconstructs its pixels.
+// The arithmetic is copied from the two-pass shaders so results match them.
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(binding = 0, rgba16f) uniform readonly image2D srcRgb;
+// Binding 1 is the two-pass chroma scratch; unused here but kept so both
+// variants share one descriptor layout.
+layout(binding = 2, rgba16f) uniform writeonly image2D dstRgb;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    uint normalizedChroma;
+    float edgeSigma;
+    float chromaBound;
+}
+pc;
+
+const int kTile = 16;
+const int kSrc = kTile + 4;  // median needs +-1 around the +-1 reconstruct window
+const int kMed = kTile + 2;
+shared vec2 srcIq[kSrc * kSrc];
+shared float srcY[kSrc * kSrc];
+shared vec2 medIq[kMed * kMed];
+
+float Yof(vec3 c) { return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b; }
+vec2 toIQ(vec3 c) { return vec2(0.596 * c.r - 0.275 * c.g - 0.321 * c.b, 0.212 * c.r - 0.523 * c.g + 0.311 * c.b); }
+vec2 iqOf(vec3 rgb) {
+    vec2 iq = toIQ(rgb);
+    if (pc.normalizedChroma != 0u) iq /= max(dot(rgb, vec3(0.299, 0.587, 0.114)), 1e-4);
+    return iq;
+}
+vec3 fromYIQ(float Y, vec2 iq) {
+    return vec3(Y + 0.956 * iq.x + 0.621 * iq.y, Y - 0.272 * iq.x - 0.647 * iq.y, Y - 1.105 * iq.x + 1.702 * iq.y);
+}
+
+void cswap(inout vec2 a, inout vec2 b) {
+    vec2 lo = min(a, b), hi = max(a, b);
+    a = lo;
+    b = hi;
+}
+void middle4of6(vec2 a0, vec2 a1, vec2 a2, vec2 a3, vec2 a4, vec2 a5, out vec2 r0, out vec2 r1, out vec2 r2,
+                out vec2 r3) {
+    r0 = min(a1, a2);
+    r1 = max(a1, a2);
+    vec2 left = min(a0, r1);
+    r1 = max(a0, r1);
+    vec2 tmp = min(left, r0);
+    r0 = max(left, r0);
+    left = tmp;
+    r3 = min(a4, a5);
+    vec2 right = max(a4, a5);
+    r2 = min(a3, right);
+    right = max(a3, right);
+    tmp = min(r2, r3);
+    r3 = max(r2, r3);
+    r2 = max(left, tmp);
+    r1 = min(r1, right);
+}
+vec2 median7(vec2 a, vec2 b, vec2 c, vec2 d, vec2 e, vec2 f, vec2 g) {
+    vec2 v0 = a, v1 = b, v2 = c, v3 = d, v4 = e, v5 = f, v6 = g;
+    cswap(v0, v5);
+    cswap(v0, v3);
+    cswap(v1, v6);
+    cswap(v2, v4);
+    cswap(v0, v1);
+    cswap(v3, v5);
+    cswap(v2, v6);
+    cswap(v2, v3);
+    cswap(v3, v6);
+    cswap(v4, v5);
+    cswap(v1, v4);
+    cswap(v1, v3);
+    cswap(v3, v4);
+    return v3;
+}
+float boundScale(float Y, vec2 iq, float sourceMaximum) {
+    float upper = max(Y, sourceMaximum) > 1.0 ? 1.25 * max(Y, sourceMaximum) : 1.0;
+    vec3 full = fromYIQ(Y, iq);
+    if (all(greaterThanEqual(full, vec3(0.0))) && all(lessThanEqual(full, vec3(upper)))) return 1.0;
+    float lo = 0.0, hi = 1.0;
+    for (int i = 0; i < 4; ++i) {
+        float mid = 0.5 * (lo + hi);
+        vec3 c = fromYIQ(Y, mid * iq);
+        if (all(greaterThanEqual(c, vec3(0.0))) && all(lessThanEqual(c, vec3(upper)))) lo = mid;
+        else hi = mid;
+    }
+    return lo;
+}
+
+vec2 iqAt(ivec2 s) { return srcIq[s.y * kSrc + s.x]; }
+
+void main() {
+    const int W = int(pc.width), H = int(pc.height);
+    const ivec2 tileOrigin = ivec2(gl_WorkGroupID.xy) * kTile;
+    const ivec2 srcOrigin = tileOrigin - 2;
+    const ivec2 maxCoord = ivec2(W - 1, H - 1);
+    for (uint i = gl_LocalInvocationIndex; i < uint(kSrc * kSrc); i += 256u) {
+        ivec2 q = clamp(srcOrigin + ivec2(int(i) % kSrc, int(i) / kSrc), ivec2(0), maxCoord);
+        vec3 rgb = imageLoad(srcRgb, q).rgb;
+        srcIq[i] = iqOf(rgb);
+        srcY[i] = Yof(rgb);
+    }
+    barrier();
+
+    // Median chroma for the 18x18 window, following fcc_chroma_median.comp.
+    // Positions outside the image are never read by the reconstruct below.
+    for (uint i = gl_LocalInvocationIndex; i < uint(kMed * kMed); i += 256u) {
+        const ivec2 m = ivec2(int(i) % kMed, int(i) / kMed);
+        const int x = tileOrigin.x - 1 + m.x, y = tileOrigin.y - 1 + m.y;
+        const ivec2 s = m + 1;  // this position inside srcIq
+        if (y == 0 || y == H - 1 || x == 0 || x >= W - 2 || x < 0 || y < 0 || y >= H) {
+            medIq[i] = iqAt(s);
+            continue;
+        }
+        vec2 upL = iqAt(s + ivec2(-1, -1)), midL = iqAt(s + ivec2(-1, 0)), downL = iqAt(s + ivec2(-1, 1));
+        vec2 upC = iqAt(s + ivec2(0, -1)), midC = iqAt(s), downC = iqAt(s + ivec2(0, 1));
+        vec2 upR = iqAt(s + ivec2(1, -1)), midR = iqAt(s + ivec2(1, 0)), downR = iqAt(s + ivec2(1, 1));
+        vec2 m0, m1, m2, m3;
+        if ((x & 1) == 1) {
+            middle4of6(upC, midC, downC, upR, midR, downR, m0, m1, m2, m3);
+            medIq[i] = median7(upL, midL, downL, m0, m1, m2, m3);
+        } else {
+            middle4of6(upL, midL, downL, upC, midC, downC, m0, m1, m2, m3);
+            medIq[i] = median7(upR, midR, downR, m0, m1, m2, m3);
+        }
+    }
+    barrier();
+
+    // Reconstruct, following fcc_reconstruct.comp.
+    const ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= W || p.y >= H) return;
+    vec4 s = imageLoad(srcRgb, p);
+    if (p.y == 0 || p.y == H - 1) {
+        imageStore(dstRgb, p, s);
+        return;
+    }
+    const ivec2 m = ivec2(gl_LocalInvocationID.xy) + 1;  // this pixel inside medIq
+    vec2 iq;
+    if (p.x == 0 || p.x == W - 1) {
+        iq = medIq[m.y * kMed + m.x];
+    } else if (pc.edgeSigma > 0.0) {
+        float Yc = Yof(s.rgb);
+        float inv2s2 = 1.0 / max(pc.edgeSigma * pc.edgeSigma, 1e-8);
+        vec2 acc = vec2(0.0);
+        float wSum = 0.0;
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) {
+                float Yn = srcY[(m.y + 1 + dy) * kSrc + m.x + 1 + dx];
+                float d = Yn - Yc;
+                float w = exp(-d * d * inv2s2);
+                acc += w * medIq[(m.y + dy) * kMed + m.x + dx];
+                wSum += w;
+            }
+        iq = acc / max(wSum, 1e-6);
+    } else {
+        iq = vec2(0.0);
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) iq += medIq[(m.y + dy) * kMed + m.x + dx];
+        iq *= 1.0 / 9.0;
+    }
+    float Y = Yof(s.rgb);
+    if (pc.normalizedChroma != 0u) iq *= max(Y, 1e-4);
+    if (pc.chromaBound > 0.0) iq *= boundScale(Y, iq, max(s.r, max(s.g, s.b)));
+    imageStore(dstRgb, p, vec4(fromYIQ(Y, iq), s.a));
+}

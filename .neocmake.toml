@@ -1,0 +1,2 @@
+# Keep CMake diagnostics consistent with the project's 120-column style.
+line_max_words = 120

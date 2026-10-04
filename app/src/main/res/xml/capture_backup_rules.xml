@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Recovery URIs belong to this device's media provider, not a restored phone. -->
+    <exclude domain="file" path="still_jobs/" />
+    <!-- Device-local thumbnail URI cache: MediaStore IDs are not stable across restores. -->
+    <exclude domain="sharedpref" path="gallery_thumbnail.xml" />
+    <!-- Device-local imports: LUT binaries + Vulkan driver .so files stay on this device. -->
+    <exclude domain="file" path="lut_profiles/" />
+    <exclude domain="file" path="gpu_driver/" />
+    <exclude domain="file" path="gpu_driver_staging/" />
+    <exclude domain="sharedpref" path="gpu_driver_bootstrap.xml" />
+</full-backup-content>

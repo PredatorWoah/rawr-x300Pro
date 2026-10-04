@@ -1,0 +1,53 @@
+#pragma once
+
+#include <android/hardware_buffer.h>
+#include <android/native_window.h>
+#include <media/NdkImage.h>
+#include <media/NdkImageReader.h>
+
+#include <cstdint>
+#include <functional>
+#include <string>
+
+#include "geometry/RawGeometry.h"
+
+namespace rawrcam::imaging {
+
+struct AcquiredRawFrame {
+    AImage* image = nullptr;
+    AHardwareBuffer* ahb = nullptr;
+    int acquireFenceFd = -1;
+    uint64_t timestampNs = 0;
+    uint64_t generation = 0;
+};
+
+class RawFrameIngress final {
+   public:
+    using FrameCallback = std::function<void(AcquiredRawFrame)>;
+    using Diagnostic = std::function<void(const std::string&)>;
+
+    RawFrameIngress(FrameCallback frameCallback, Diagnostic diagnostic, Diagnostic pipelineAudit);
+    ~RawFrameIngress();
+
+    RawFrameIngress(const RawFrameIngress&) = delete;
+    RawFrameIngress& operator=(const RawFrameIngress&) = delete;
+
+    ANativeWindow* create(uint64_t generation, uint32_t width, uint32_t height, geometry::RawPixelFormat format,
+                          uint64_t ahbUsage);
+    void destroy();
+
+   private:
+    static void imageAvailableThunk(void* context, AImageReader* reader);
+    void onImageAvailable(AImageReader* reader);
+    void logImageDescription(AImage* image);
+
+    FrameCallback frameCallback_;
+    Diagnostic diagnostic_;
+    Diagnostic pipelineAudit_;
+    AImageReader* reader_ = nullptr;
+    uint64_t generation_ = 0;
+    bool imageDescriptionLogged_ = false;
+    uint32_t auditImageCount_ = 0;
+};
+
+}  // namespace rawrcam::imaging

@@ -1,0 +1,20 @@
+{
+  "n": 128,
+  "cases": {
+    "lattice": {
+      "raw_phase_std8": 1.031092698471535,
+      "out_phase_std8_true": 0.18876592493948374,
+      "out_phase_std8_fast": 0.21092121881937356
+    },
+    "step": {
+      "raw_phase_std8": 1.3356006393395103,
+      "out_phase_std8_true": 1.3273263731568223,
+      "out_phase_std8_fast": 1.3279923362303894
+    },
+    "sky": {
+      "raw_phase_std8": 12.376014587049575,
+      "out_phase_std8_true": 12.370306201695877,
+      "out_phase_std8_fast": 12.370320138058792
+    }
+  }
+}

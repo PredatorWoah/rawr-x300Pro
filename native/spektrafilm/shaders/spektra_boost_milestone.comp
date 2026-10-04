@@ -1,0 +1,69 @@
+#version 450
+
+// Adapter-owned (not upstream): per-tile partial-max feed for the tiled
+// halation-boost milestone. Each thread maps its tile-local pixel to the
+// GLOBAL linear index (tileOrigin + local, fullWidth stride) and atomically
+// raises the 256-px chunk maximum (uint bit order == float order for the
+// non-negative film raw). A later SpektraHalation op8 (BoostReduceMax) pass
+// over the chunk buffer derives (maxRaw, rawX0, a, k) exactly like the
+// full-frame path. Chunks are 16B-strided (uint max + 12B pad) to match the
+// op8 reader; init to zero with vkCmdFillBuffer (film raw is >= 0).
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer SourcePixels {
+  vec4 src[];
+};
+
+layout(std430, binding = 1) coherent buffer ChunkMaxima {
+  uint words[];
+};
+
+// CorePush-compatible offsets (shared 104B core pipeline layout).
+layout(push_constant) uniform CoreParams {
+  uint width;
+  uint height;
+  float filmExposureEv;
+  float filmGamma;
+  uint exposureCount;
+  int inputColorSpace;
+  int rgbToRawMethod;
+  uint colorSpaceCount;
+  uint transferLutSize;
+  float colorDecodeMin;
+  float colorDecodeMax;
+  uint hanatosWidth;
+  uint hanatosHeight;
+  uint _pad0;
+  uint _pad1;
+  uint _pad2;
+  int filmPushPullMode;
+  float filmPushPullStops;
+  uint fullWidth;
+  uint fullHeight;
+  uint tileOriginX;
+  uint tileOriginY;
+  uint activeOriginX;
+  uint activeOriginY;
+  uint activeWidth;
+  uint activeHeight;
+} params;
+
+void main() {
+  const uint linearLocal = gl_GlobalInvocationID.x;
+  const uint count = params.width * params.height;
+  if (linearLocal >= count) {
+    return;
+  }
+  const vec4 pixel = src[linearLocal];
+  const float m = max(max(pixel.r, pixel.g), pixel.b);
+  if (!(m > 0.0)) {
+    return;
+  }
+  const uint lx = linearLocal % max(params.width, 1u);
+  const uint ly = linearLocal / max(params.width, 1u);
+  const uint gx = params.tileOriginX + lx;
+  const uint gy = params.tileOriginY + ly;
+  const uint globalIndex = gy * max(params.fullWidth, 1u) + gx;
+  const uint chunk = globalIndex / 256u;
+  atomicMax(words[chunk * 4u], floatBitsToUint(m));
+}

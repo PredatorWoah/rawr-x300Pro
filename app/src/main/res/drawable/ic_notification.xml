@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Silhouette notification icon (white on transparent). Do not use the full-color
+     launcher icon here: API 26+ renders non-silhouette icons as solid shapes. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="108" android:viewportHeight="108">
+  <path android:fillColor="#FFFFFFFF" android:pathData="M35,25 Q35,20 40,20 L73,20 Q78,20 78,25 L78,33 L55,33 Q48,33 48,40 L48,82 L35,82 Z"/>
+  <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M66,36 A20,20 0,1 1,65.99,36 M66,43 A13,13 0,1 0,66.01,69 A13,13 0,1 0,66,43"/>
+  <path android:fillColor="#FFFFFFFF" android:pathData="M27,35 L34,39 L27,43 Q23,39 27,35 Z M25,49 L34,53 L25,57 Q21,53 25,49 Z M27,63 L34,67 L27,71 Q23,67 27,63 Z"/>
+</vector>

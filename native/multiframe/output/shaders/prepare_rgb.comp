@@ -1,0 +1,73 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(binding = 0, rgba16f) readonly uniform image2D mergedRgb;
+layout(binding = 1, rgba16f) writeonly uniform image2D outRgb;
+layout(binding = 2, r16ui) writeonly uniform uimage2D clipState;
+layout(std430, binding = 3) readonly buffer LensShading { vec4 gains[]; } lsc;
+// Optional reference-frame sensor evidence (1A). Bound at prepare time;
+// when unused the adapter binds a valid placeholder view and clears
+// useSensorClip, so the sensor term is skipped in-shader.
+layout(binding = 4, r16ui) readonly uniform uimage2D refRaw;
+layout(push_constant) uniform P {
+    uint width, height, lscWidth, lscHeight;
+    uint refWidth, refHeight, cfa, useSensorClip;
+    vec4 black;
+    vec4 invRange;
+    float clipThreshold;
+} p;
+#include "cfa_common.glsl"
+
+// Merged RGB carries green at every pixel, interpolated from both G_even and
+// G_odd sites, so it takes the mean of the two green gains rather than the
+// row-parity selection lens_shading.glsl uses for CFA samples.
+vec3 gainAt(ivec2 q) {
+    vec2 xy = vec2(q) / max(vec2(p.width, p.height) - 1.0, vec2(1));
+    xy *= vec2(p.lscWidth - 1u, p.lscHeight - 1u);
+    ivec2 lo = ivec2(floor(xy)), hi = min(lo + 1, ivec2(p.lscWidth, p.lscHeight) - 1);
+    vec2 f = fract(xy);
+    vec4 a = mix(lsc.gains[lo.y * int(p.lscWidth) + lo.x], lsc.gains[lo.y * int(p.lscWidth) + hi.x], f.x);
+    vec4 b = mix(lsc.gains[hi.y * int(p.lscWidth) + lo.x], lsc.gains[hi.y * int(p.lscWidth) + hi.x], f.x);
+    vec4 g = mix(a, b, f.y);
+    return vec3(g.r, .5 * (g.g + g.b), g.a);
+}
+uint sensorClipForCell(ivec2 cell) {
+    ivec2 qr, qg1, qg2, qb;
+    rawrCfaCellCoordinates(p.cfa, cell, qr, qg1, qg2, qb);
+    ivec2 rawExtent = ivec2(int(p.refWidth), int(p.refHeight));
+    qr = clamp(qr, ivec2(0), rawExtent - ivec2(1));
+    qg1 = clamp(qg1, ivec2(0), rawExtent - ivec2(1));
+    qg2 = clamp(qg2, ivec2(0), rawExtent - ivec2(1));
+    qb = clamp(qb, ivec2(0), rawExtent - ivec2(1));
+    float r = clamp((float(imageLoad(refRaw, qr).r) - p.black[0]) * p.invRange[0], 0.0, 1.0);
+    float g1 = clamp((float(imageLoad(refRaw, qg1).r) - p.black[1]) * p.invRange[1], 0.0, 1.0);
+    float g2 = clamp((float(imageLoad(refRaw, qg2).r) - p.black[2]) * p.invRange[2], 0.0, 1.0);
+    float b = clamp((float(imageLoad(refRaw, qb).r) - p.black[3]) * p.invRange[3], 0.0, 1.0);
+    // Same pre-LSC/WB classification as raw_demosaic sensor_clip_pack: per-phase
+    // truth, G1/G2 independent (fixes the derived mask's collapsed bits 6).
+    return (r >= p.clipThreshold ? 1u : 0u) | (g1 >= p.clipThreshold ? 2u : 0u) |
+           (g2 >= p.clipThreshold ? 4u : 0u) | (b >= p.clipThreshold ? 8u : 0u);
+}
+void main() {
+    ivec2 cell = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(cell, imageSize(clipState)))) return;
+    uint mask = 0u;
+    for (int y = 0; y < 2; ++y) for (int x = 0; x < 2; ++x) {
+        ivec2 q = cell * 2 + ivec2(x, y);
+        if (q.x >= int(p.width) || q.y >= int(p.height)) continue;
+        vec3 v = imageLoad(mergedRgb, q).rgb;
+        bvec3 invalid = bvec3(isnan(v.x) || isinf(v.x), isnan(v.y) || isinf(v.y), isnan(v.z) || isinf(v.z));
+        if (invalid.r || v.r >= .995) mask |= 1u;
+        if (invalid.g || v.g >= .995) mask |= 6u;
+        if (invalid.b || v.b >= .995) mask |= 8u;
+        v = mix(v, vec3(0), invalid);
+        imageStore(outRgb, q, vec4(clamp(v, 0.0, 1.0) * gainAt(q), 1));
+    }
+    // 1A: OR reference sensor truth when geometry matches (scale 1x).
+    // Conservative: clipped if either merged-derived or sensor says so.
+    // Sensor-only clips diluted below .995 by the merge are recovered here.
+    if (p.useSensorClip != 0u && p.refWidth == p.width && p.refHeight == p.height) {
+        mask |= sensorClipForCell(cell);
+    }
+    imageStore(clipState, cell, uvec4(mask, 0, 0, 0));
+}

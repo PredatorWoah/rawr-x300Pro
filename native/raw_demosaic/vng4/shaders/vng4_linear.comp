@@ -1,0 +1,38 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#ifndef VNG4_WGX
+#define VNG4_WGX 16
+#endif
+#ifndef VNG4_WGY
+#define VNG4_WGY 16
+#endif
+layout(local_size_x = VNG4_WGX, local_size_y = VNG4_WGY, local_size_z = 1) in;
+#include "vng4_common.glsl"
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    int own = vngColorAt(p);
+    vec4 outv = vec4(0);
+    outv[own] = cfa(p);
+    // Reference image buffer leaves first/last rows/cols with native CFA only.
+    if (inside(p, 1)) {
+        vec4 sum = vec4(0), den = vec4(0);
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) {
+                if (dx == 0 && dy == 0) continue;
+                int c = vngColorAt(p + ivec2(dx, dy));
+                float w = ((dy == 0) ? 1.0 : 0.0) + ((dx == 0) ? 1.0 : 0.0);
+                w = exp2(w);
+                precise float weighted = cfa(p + ivec2(dx, dy)) * w;
+                precise float nextSum = sum[c] + weighted;
+                sum[c] = nextSum;
+                den[c] += w;
+            }
+        for (int c = 0; c < 4; ++c)
+            if (c != own) {
+                precise float interpolated = sum[c] / den[c];
+                outv[c] = interpolated;
+            }
+    }
+    imageStore(working4Image, p, outv);
+}

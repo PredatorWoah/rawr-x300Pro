@@ -1,0 +1,625 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Compile-time workgroup variants used by validation: 8x8, 16x8, 8x16, 16x16.
+#ifndef LOCAL_X
+#define LOCAL_X 8
+#endif
+#ifndef LOCAL_Y
+#define LOCAL_Y 16
+#endif
+layout(local_size_x = LOCAL_X, local_size_y = LOCAL_Y, local_size_z = 1) in;
+
+#ifndef RAWR_TONEMAP_RAW_INPUT
+#define RAWR_TONEMAP_RAW_INPUT 0
+#endif
+#ifndef RAWR_TONEMAP_VIDEO_MONITOR
+#define RAWR_TONEMAP_VIDEO_MONITOR 0
+#endif
+#if RAWR_TONEMAP_RAW_INPUT
+#define VIDEO_RAW_IMAGE_BINDING 0
+#define VIDEO_RAW_BUFFER_BINDING 5
+#define VIDEO_LSC_BINDING 6
+#include "video_raw_core.glsl"
+layout(binding = 7, rgba8) uniform writeonly image2D monitorImage;
+#else
+layout(binding = 0, rgba16f) uniform readonly image2D inputImage;
+#if RAWR_TONEMAP_VIDEO_MONITOR
+layout(binding = 7, rgba8) uniform writeonly image2D monitorImage;
+// highlightCompression > 0 applies the Inpaint Opposed SDR tone tap
+// (coloropp_tone.comp) to the input here instead of in its own pass.
+layout(push_constant) uniform VideoMonitorParams {
+    uint monitorEnabled;
+    float highlightCompression;
+    float highlightExposureGain;
+} videoMonitor;
+
+float highlightFactor(float level) {
+    if (videoMonitor.highlightCompression <= 0.0 || level <= 0.0) return 1.0;
+    float shoulder = 0.1 / 65536.0;
+    float scaled = max(level - shoulder, 0.0) * videoMonitor.highlightCompression / (1.0 - shoulder);
+    return scaled > 1e-7 ? log(1.0 + scaled) / scaled : 1.0;
+}
+// The separate tap stored its result as RGBA16F; round the same way
+// (nearest, ties to even) in integer math.
+float roundHalf(float f) {
+    uint x = floatBitsToUint(f), sign = x & 0x80000000u, a = x & 0x7fffffffu;
+    if (a >= 0x7f800000u) return f;
+    if (a >= 0x477ff000u) return uintBitsToFloat(sign | 0x7f800000u);
+    if (a < 0x38800000u) {
+        float q = roundEven(uintBitsToFloat(a) * 16777216.0) / 16777216.0;
+        return uintBitsToFloat(sign | floatBitsToUint(q));
+    }
+    a += 0x0fffu + ((a >> 13) & 1u);
+    return uintBitsToFloat(sign | (a & ~0x1fffu));
+}
+vec3 applyHighlightTone(vec3 value) {
+    if (videoMonitor.highlightCompression <= 0.0) return value;
+    vec3 exposed = value * videoMonitor.highlightExposureGain;
+    float scale = (highlightFactor(exposed.r) + highlightFactor(exposed.g) + highlightFactor(exposed.b)) / 3.0;
+    vec3 toned = value * scale;
+    return vec3(roundHalf(toned.r), roundHalf(toned.g), roundHalf(toned.b));
+}
+#endif
+#endif
+#ifndef RAWR_TONEMAP_OUTPUT_RGBA16F
+#define RAWR_TONEMAP_OUTPUT_RGBA16F 0
+#endif
+#ifndef RAWR_TONEMAP_OUTPUT_RGB10A2
+#define RAWR_TONEMAP_OUTPUT_RGB10A2 0
+#endif
+#ifndef RAWR_TONEMAP_OUTPUT_RGBA32F
+#define RAWR_TONEMAP_OUTPUT_RGBA32F 0
+#endif
+#if RAWR_TONEMAP_OUTPUT_RGBA32F
+layout(binding = 1, rgba32f) uniform writeonly image2D outputImage;
+#elif RAWR_TONEMAP_OUTPUT_RGBA16F
+layout(binding = 1, rgba16f) uniform writeonly image2D outputImage;
+#elif RAWR_TONEMAP_OUTPUT_RGB10A2
+// 10-bit recording into a packed A2B10G10R10 encoder Surface.
+layout(binding = 1, rgb10_a2) uniform writeonly image2D outputImage;
+#else
+layout(binding = 1, rgba8) uniform writeonly image2D outputImage;
+#endif
+
+// knotX01_23, knotX4_exposure_sat_gc.x/.w, curve0-3, renderConfig.x and
+// colorControls.zw are still filled by the host but no longer read here; the
+// layout is kept to match TonemapEngine's GpuParameters.
+layout(std140, binding = 2) uniform TonemapGpuParams {
+    mat4 cameraToWorking;         // upper-left mat3; mat4 avoids mat3 packing ambiguity
+    vec4 knotX01_23;              // x0,x1,x2,x3
+    vec4 knotX4_exposure_sat_gc;  // x4, exposureEV, saturation, gamutCompressionStart
+    vec4 colorControls;           // vibrance, strength, shadowStart, shadowEnd
+    vec4 renderConfig;            // middleGray, aePostGainEV, ShadowsUI, MidtonesUI
+    vec4 toneControls;            // ContrastUI, HighlightsUI, BlacksUI, WhitesUI
+    vec4 curve0;
+    vec4 curve1;
+    vec4 curve2;
+    vec4 curve3;
+    uvec4 extent;                // output width/height, input width/height
+    uvec4 lutControl;            // enabled,stageCount,inputGamut,inputTransfer
+    uvec4 lutOutput;             // outputGamut,outputTransfer,placement,afterAction(0=direct,1=convert sRGB)
+    vec4 lutBlend;               // intensity,combineUserGamut,combineNeutralGamut,unused
+    uvec4 lutStageIndexSize[8];  // texelOffset,size,unused,unused
+    vec4 lutDomainMin[8];
+    vec4 lutDomainMax[8];
+    mat4 neutralGamut;
+    mat4 userInputGamut;
+    mat4 userOutputGamut;
+    uvec4 directRender; // transform, output gamut, output transfer, reserved
+}
+P;
+
+// RAWR NTRL production technical LUT. Baked 65^3 transform with contract:
+// DaVinci Wide Gamut / DaVinci Intermediate -> encoded sRGB.
+// R is the fastest LUT axis.
+#ifndef RAWR_TONEMAP_NEUTRAL_TEXTURE
+#define RAWR_TONEMAP_NEUTRAL_TEXTURE 0
+#endif
+#if RAWR_TONEMAP_NEUTRAL_TEXTURE
+layout(binding = 3) uniform sampler3D neutralLutTexture;
+#else
+layout(std430, binding = 3) readonly buffer RawrNeutralTechnicalLut { vec4 texel[]; }
+RN;
+#endif
+
+// Optional user LUT chain. The engine always binds a valid SSBO; when LUTs are
+// disabled lutControl.x is zero and this buffer contains one harmless texel.
+#ifndef RAWR_TONEMAP_USER_TEXTURE
+#define RAWR_TONEMAP_USER_TEXTURE 0
+#endif
+#if RAWR_TONEMAP_USER_TEXTURE
+layout(binding = 4) uniform sampler3D userLutTextures[8];
+#else
+layout(std430, binding = 4) readonly buffer UserLutBuffer { vec4 texel[]; }
+UL;
+#endif
+
+#include "color/cst.glsl"
+#include "lut/lut3d.glsl"
+
+// Benchmark switch retains the original CST with the same parameter ABI.
+#ifndef RAWR_TONEMAP_COMBINED_CST
+#define RAWR_TONEMAP_COMBINED_CST 1
+#endif
+// LUT configuration is immutable for the lifetime of the engine. Specialize
+// its safety fallbacks at creation so they add no per-pixel branch overhead.
+layout(constant_id = 0) const bool COMBINE_USER_GAMUT = true;
+layout(constant_id = 1) const bool COMBINE_NEUTRAL_GAMUT = true;
+vec3 rawrTonemapCst(vec3 rgb, uint srcGamut, uint srcTf, uint dstGamut, uint dstTf, mat4 gamut) {
+#if RAWR_TONEMAP_COMBINED_CST
+    if (srcGamut == dstGamut && srcTf == dstTf) return rgb;
+    vec3 lin = rawrDecodeTransfer(rgb, srcTf);
+    if (srcGamut != dstGamut) lin = mat3(gamut) * lin;
+    return rawrEncodeTransfer(lin, dstTf);
+#else
+    return rawrCst(rgb, srcGamut, srcTf, dstGamut, dstTf);
+#endif
+}
+
+vec3 rawrUserCst(vec3 rgb, uint srcGamut, uint srcTf, uint dstGamut, uint dstTf, mat4 gamut) {
+    if (!COMBINE_USER_GAMUT) return rawrCst(rgb, srcGamut, srcTf, dstGamut, dstTf);
+    return rawrTonemapCst(rgb, srcGamut, srcTf, dstGamut, dstTf, gamut);
+}
+
+const vec3 AP1_LUMA = vec3(0.2722287168, 0.6740817658, 0.0536895174);
+const vec3 SRGB_LUMA = vec3(0.2126, 0.7152, 0.0722);
+const float EPSILON = 0.00000095367431640625;  // 2^-20
+
+const int RAWR_NEUTRAL_LUT_SIZE = 65;
+
+uint rawrNeutralIndex(ivec3 p) { return uint(p.x + RAWR_NEUTRAL_LUT_SIZE * (p.y + RAWR_NEUTRAL_LUT_SIZE * p.z)); }
+
+vec3 rawrNeutralFetch(ivec3 p) {
+#if RAWR_TONEMAP_NEUTRAL_TEXTURE
+    return texelFetch(neutralLutTexture, p, 0).rgb;
+#else
+    return RN.texel[rawrNeutralIndex(p)].rgb;
+#endif
+}
+
+// Tetrahedral interpolation over the baked 65^3 technical LUT.
+vec3 sampleRawrNeutralTechnical(vec3 q) {
+    vec3 z = clamp(q, 0.0, 1.0) * float(RAWR_NEUTRAL_LUT_SIZE - 1);
+    ivec3 i0 = ivec3(floor(z));
+    ivec3 i1 = min(i0 + ivec3(1), ivec3(RAWR_NEUTRAL_LUT_SIZE - 1));
+    vec3 f = z - vec3(i0);
+
+    vec3 c000 = rawrNeutralFetch(i0);
+    vec3 outc;
+    if (f.r >= f.g) {
+        if (f.g >= f.b) {
+            vec3 c100 = rawrNeutralFetch(ivec3(i1.x, i0.y, i0.z));
+            vec3 c110 = rawrNeutralFetch(ivec3(i1.x, i1.y, i0.z));
+            vec3 c111 = rawrNeutralFetch(i1);
+            outc = c000 + f.r * (c100 - c000) + f.g * (c110 - c100) + f.b * (c111 - c110);
+        } else if (f.r >= f.b) {
+            vec3 c100 = rawrNeutralFetch(ivec3(i1.x, i0.y, i0.z));
+            vec3 c101 = rawrNeutralFetch(ivec3(i1.x, i0.y, i1.z));
+            vec3 c111 = rawrNeutralFetch(i1);
+            outc = c000 + f.r * (c100 - c000) + f.b * (c101 - c100) + f.g * (c111 - c101);
+        } else {
+            vec3 c001 = rawrNeutralFetch(ivec3(i0.x, i0.y, i1.z));
+            vec3 c101 = rawrNeutralFetch(ivec3(i1.x, i0.y, i1.z));
+            vec3 c111 = rawrNeutralFetch(i1);
+            outc = c000 + f.b * (c001 - c000) + f.r * (c101 - c001) + f.g * (c111 - c101);
+        }
+    } else {
+        if (f.b >= f.g) {
+            vec3 c001 = rawrNeutralFetch(ivec3(i0.x, i0.y, i1.z));
+            vec3 c011 = rawrNeutralFetch(ivec3(i0.x, i1.y, i1.z));
+            vec3 c111 = rawrNeutralFetch(i1);
+            outc = c000 + f.b * (c001 - c000) + f.g * (c011 - c001) + f.r * (c111 - c011);
+        } else if (f.b >= f.r) {
+            vec3 c010 = rawrNeutralFetch(ivec3(i0.x, i1.y, i0.z));
+            vec3 c011 = rawrNeutralFetch(ivec3(i0.x, i1.y, i1.z));
+            vec3 c111 = rawrNeutralFetch(i1);
+            outc = c000 + f.g * (c010 - c000) + f.b * (c011 - c010) + f.r * (c111 - c011);
+        } else {
+            vec3 c010 = rawrNeutralFetch(ivec3(i0.x, i1.y, i0.z));
+            vec3 c110 = rawrNeutralFetch(ivec3(i1.x, i1.y, i0.z));
+            vec3 c111 = rawrNeutralFetch(i1);
+            outc = c000 + f.g * (c010 - c000) + f.r * (c110 - c010) + f.b * (c111 - c110);
+        }
+    }
+    return outc;
+}
+
+// ---- Rawr photographic tone controls (Iter24) ---------------------------------
+// These operators were fitted in encoded Rec.709/sRGB luminance. Every control
+// is evaluated from the original display-domain luminance. Their target curves
+// are combined with a convex interaction budget, so stacked controls cannot
+// create tone inversions or become order-dependent.
+
+float logistic(float x) { return 1.0 / (1.0 + exp(-clamp(x, -30.0, 30.0))); }
+float displayEV(float y) { return log2(max(y, 1e-7) / 0.18); }
+
+float evWindow(float y, float lo, float lw, float hi, float hw) {
+    float e = displayEV(y);
+    return logistic((e - lo) / lw) * logistic((hi - e) / hw);
+}
+
+float shadowHighlightDelta(float y, float slider, bool shadows) {
+    if (abs(slider) < 1e-6) return 0.0;
+    float t = abs(slider) * 0.01;
+    bool pos = slider > 0.0;
+    float gain, lo, lw, hi, hw;
+    if (shadows) {
+        if (pos) {
+            gain = .63736424;
+            lo = -1.87006384;
+            lw = .24788263;
+            hi = .33845705;
+            hw = .42852663;
+        } else {
+            gain = .53939196;
+            lo = -3.08100106;
+            lw = .46467750;
+            hi = -1.0;
+            hw = .50487736;
+        }
+    } else {
+        // Negative Highlights is handled before the Rawr neutral render so it
+        // can use scene-linear/reconstructed headroom that would otherwise be
+        // compressed or clipped by the display transform. Keep only the
+        // positive endpoint here in display space.
+        if (!pos) return 0.0;
+        gain = .33178878;
+        lo = 1.0;
+        lw = .53653144;
+        hi = 2.50958786;
+        hw = .21209297;
+    }
+    return (pos ? 1.0 : -1.0) * t * gain * evWindow(y, lo, lw, hi, hw);
+}
+
+vec3 applySceneLinearHighlightCompression(vec3 rgb, float highlightsUI) {
+    // Negative Highlights is defined in scene exposure (EV), not linear-code-value
+    // space. RGB remains scene-linear AP1; only luminance is mapped to log2 exposure,
+    // adjusted there with a C1-smooth influence ramp, then converted back to a single
+    // RGB scale. This keeps the control renderer/LUT independent and preserves ratios.
+    float amount = clamp(-highlightsUI * 0.01, 0.0, 1.0);
+    if (amount <= 1e-6) return rgb;
+
+    const vec3 AP1_LUMA = vec3(0.2722287168, 0.6740817658, 0.0536895174);
+    const float middleGray = 0.18;
+    float y = dot(AP1_LUMA, rgb);
+    if (y <= 1e-8) return rgb;
+
+    float ev = log2(max(y, 1e-8) / middleGray);
+    // Leave upper midtones and ordinary blue sky alone. Begin at +1.5 EV and
+    // reach full influence at +3 EV, where reconstructed RAW headroom lives.
+    // smoothstep has zero first derivative at both ends, avoiding a hard pivot.
+    const float startEv = 1.5;
+    float influence = smoothstep(startEv, 3.0, ev);
+    if (influence <= 1e-6) return rgb;
+    // At -100, fold half the distance above the start into the display
+    // shoulder. This reveals reconstructed texture while keeping the cloud/sun
+    // core bright instead of turning the entire highlight region grey.
+    float compressedEv = startEv + (ev - startEv) * (1.0 - 0.50 * amount * influence);
+    float target = middleGray * exp2(compressedEv);
+    return rgb * (target / y);
+}
+
+float shadowsHighlightsEndpoint(float y, float shadowsUI, float highlightsUI) {
+    float ds = shadowHighlightDelta(y, shadowsUI, true);
+    float dh = shadowHighlightDelta(y, highlightsUI, false);
+    float de = ds + dh;
+    if (shadowsUI * highlightsUI > 0.0) {
+        bool sp = shadowsUI > 0.0, hp = highlightsUI > 0.0;
+        float ws = sp ? evWindow(y, -1.87006384, .24788263, .33845705, .42852663)
+                      : evWindow(y, -3.08100106, .46467750, -1.0, .50487736);
+        float wh = hp ? evWindow(y, 1.0, .53653144, 2.50958786, .21209297)
+                      : evWindow(y, 1.0, .51468118, 2.40928792, .40009883);
+        de *= 1.0 - .28 * ws * wh;
+    }
+    return clamp(y * exp2(de), 0.0, 1.0);
+}
+
+float endpointWarp(float y, float A, float lp, float hp, float signv) {
+    float d = A * pow(clamp(y, 0.0, 1.0), lp) * pow(clamp(1.0 - y, 0.0, 1.0), hp);
+    return clamp(y + signv * d, 0.0, 1.0);
+}
+
+float blacksEndpoint(float y, bool positive) {
+    return positive ? endpointWarp(y, .317947, .510913, 1.601792, 1.0)
+                    : endpointWarp(y, .649198, .429756, 1.855968, -1.0);
+}
+
+float whitesMinusEndpoint(float y) {
+    // Iter24 endpoint-tail hardening. The original fitted exponent hp=.05 has
+    // an infinite derivative at y=1. A 0.003 smooth tail keeps the Lightroom
+    // fit essentially unchanged while making the endpoint derivative finite.
+    const float A = .153831, lp = 2.140354, hp = .05, e = .003;
+    float tail = (pow(1.0 - y + e, hp) - pow(e, hp)) / (pow(1.0 + e, hp) - pow(e, hp));
+    return clamp(y - A * pow(clamp(y, 0.0, 1.0), lp) * max(tail, 0.0), 0.0, 1.0);
+}
+
+float whitesPlusEndpoint(float y) {
+    const float A = 0.903362534, c = 0.162490279, w = 0.0622728693, lp = 0.05, hp = 1.01504295;
+    const float B = 0.379452079, lp2 = 1.65877883, hp2 = 0.778510882;
+    const float gc = 0.015, gw = 0.0310461128, gp = 1.76950216;
+    float d = A * logistic((y - c) / w) * pow(y, lp) * pow(1.0 - y, hp) + B * pow(y, lp2) * pow(1.0 - y, hp2);
+    float gate = pow(logistic((y - gc) / gw), gp);
+    return clamp(y + gate * d, 0.0, 1.0);
+}
+
+float contrastEndpoint(float y, bool positive) {
+    float gammaMag = positive ? .887506 : 1.127733;
+    float pivot = positive ? .466132 : .462911;
+    float bc = positive ? .019372 : .036008;
+    float bw = positive ? .032458 : .097921;
+    float wc = positive ? .629605 : .874738;
+    float ww = positive ? .124712 : .162069;
+    float gamma = 1.0 / gammaMag;
+    float yp = pivot * pow(max(y, 1e-7) / pivot, gamma);
+    float gate = logistic((y - bc) / bw) * logistic((wc - y) / ww);
+    return clamp(y + gate * (yp - y), 0.0, 1.0);
+}
+
+float midtonesEndpoint(float y, bool positive) {
+    // Candidate5: localized photographic midtone warp. The y^p*(1-y)^q
+    // envelope fixes black/white exactly; the EV window keeps the action out
+    // of deep shadows and strong highlights. Both endpoints are monotonic.
+    const float A = .28, lp = .70, hp = 1.30;
+    float w = evWindow(y, -2.20, .55, .70, .55);
+    float d = A * pow(clamp(y, 0.0, 1.0), lp) * pow(clamp(1.0 - y, 0.0, 1.0), hp) * w;
+    return clamp(y + (positive ? d : -d), 0.0, 1.0);
+}
+
+float maxLumaForOpponent(vec2 uv) {
+    float offB = -SRGB_LUMA.r * uv.x - (SRGB_LUMA.r + SRGB_LUMA.g) * uv.y;
+    float offG = offB + uv.y;
+    float offR = offG + uv.x;
+    return clamp(1.0 - max(offR, max(offG, offB)), 0.0, 1.0);
+}
+float minLumaForOpponent(vec2 uv) {
+    float offB = -SRGB_LUMA.r * uv.x - (SRGB_LUMA.r + SRGB_LUMA.g) * uv.y;
+    float offG = offB + uv.y;
+    float offR = offG + uv.x;
+    return clamp(-min(offR, min(offG, offB)), 0.0, 1.0);
+}
+
+vec3 reconstructOpponent(float y, vec2 uv) {
+    float b = y - SRGB_LUMA.r * uv.x - (SRGB_LUMA.r + SRGB_LUMA.g) * uv.y;
+    float g = b + uv.y;
+    float r = g + uv.x;
+    return vec3(r, g, b);
+}
+
+vec3 applyPhotographicToneControls(vec3 encodedRgb) {
+    float y = dot(SRGB_LUMA, encodedRgb);
+    float S = clamp(P.renderConfig.z, -100.0, 100.0);
+    float M = clamp(P.renderConfig.w, -100.0, 100.0);
+    float C = clamp(P.toneControls.x, -100.0, 100.0);
+    float H = clamp(P.toneControls.y, -100.0, 100.0);
+    float B = clamp(P.toneControls.z, -100.0, 100.0);
+    float W = clamp(P.toneControls.w, -100.0, 100.0);
+
+    // Highlights < 0 is already consumed by applySceneLinearHighlightCompression().
+    // Do not let that pre-render control consume the post-render convex budget:
+    // doing so silently weakens Shadows/Blacks/Whites/Contrast/Midtones when
+    // Highlights is negative. Only positive Highlights participates here.
+    float displayHighlights = max(H, 0.0);
+    float shStrength = max(abs(S), displayHighlights) * 0.01;
+    float wb = abs(B) * 0.01, ww = abs(W) * 0.01, wc = abs(C) * 0.01, wm = abs(M) * 0.01;
+    float total = shStrength + wb + ww + wc + wm;
+    if (total < 1e-7) return encodedRgb;
+    float norm = max(1.0, total);
+    float aSH = shStrength / norm, aB = wb / norm, aW = ww / norm, aC = wc / norm, aM = wm / norm;
+    float base = max(0.0, 1.0 - (aSH + aB + aW + aC + aM));
+    float yd = base * y;
+
+    if (aSH > 0.0) {
+        float sn = (shStrength > 0.0) ? S / shStrength : S;
+        float hn = (shStrength > 0.0) ? H / shStrength : H;
+        yd += aSH * shadowsHighlightsEndpoint(y, sn, hn);
+    }
+    if (aB > 0.0) yd += aB * blacksEndpoint(y, B > 0.0);
+    if (aW > 0.0) yd += aW * ((W > 0.0) ? whitesPlusEndpoint(y) : whitesMinusEndpoint(y));
+    if (aC > 0.0) yd += aC * contrastEndpoint(y, C > 0.0);
+    if (aM > 0.0) yd += aM * midtonesEndpoint(y, M > 0.0);
+    yd = clamp(yd, 0.0, 1.0);
+
+    if (W <= 0.0) return (y > EPSILON) ? clamp(encodedRgb * (yd / y), 0.0, 1.0) : vec3(0.0);
+
+    // W20b: direction-aware chroma-magnitude prediction. W10/W20 was fitted
+    // in encoded Rec.709, so this intentionally lives after sRGB OETF.
+    float t = W * .01;
+    float lift = (whitesPlusEndpoint(y) - y) * t;
+    float u = encodedRgb.r - encodedRgb.g, v = encodedRgb.g - encodedRgb.b;
+    float ch = sqrt(u * u + v * v);
+    float nx = u / max(ch, 1e-6), ny = v / max(ch, 1e-6);
+    // Unrolled W20b predictor: avoids local arrays/dynamic indexing on mobile GPUs.
+    float logk = .631159 + 8.065217 * y - 9.626372 * y * y - 2.554686 * ch + 5.688680 * ch * ch + .042475 * lift +
+                 4.735573 * lift * lift + 1.191902 * y * ch - 18.487833 * y * lift - 2.635646 * ch * lift +
+                 .192790 * nx - .243675 * ny - .154911 * nx * ch + 3.653646 * ny * ch + .886294 * nx * lift +
+                 .119229 * ny * lift - 2.196561 * nx * y + .366458 * ny * y;
+    float gate = logistic((lift - .025) / .035);
+    float k = exp(clamp(t * 1.011604 * gate * logk, -1.0, 1.85));
+    vec2 uv = vec2(u, v) * k;
+    float ya = clamp(yd, minLumaForOpponent(uv), maxLumaForOpponent(uv));
+    return clamp(reconstructOpponent(ya, uv), 0.0, 1.0);
+}
+// -----------------------------------------------------------------------------
+
+float outputDither(uvec2 p) {
+    // Static neutral low-discrepancy interleaved-gradient dither.
+    // Local thresholds are evenly distributed to suppress coherent contour stripes
+    // without exceeding +/-0.5 code or introducing temporal/chromatic noise.
+    vec2 fp = vec2(p);
+    float u = fract(52.9829189 * fract(0.06711056 * fp.x + 0.00583715 * fp.y));
+    return (u - 0.5) * (1.0 / 255.0);
+}
+
+vec3 srgbEOTF(vec3 x) {
+    x = clamp(x, 0.0, 1.0);
+    vec3 lo = x / 12.92;
+    vec3 hi = pow((x + 0.055) / 1.055, vec3(2.4));
+    return mix(hi, lo, lessThanEqual(x, vec3(0.04045)));
+}
+
+vec3 srgbOETF(vec3 x);
+
+float maxOpponentGain(vec3 Yv, vec3 C) {
+    float limit = 1e6;
+    for (int i = 0; i < 3; ++i) {
+        if (C[i] > EPSILON)
+            limit = min(limit, (1.0 - Yv[i]) / C[i]);
+        else if (C[i] < -EPSILON)
+            limit = min(limit, (0.0 - Yv[i]) / C[i]);
+    }
+    return max(limit, 0.0);
+}
+
+vec3 applyOutputColorControls(vec3 encoded) {
+    // Color controls deliberately operate after the Rawr neutral render and
+    // photographic tone controls. Neutral (0/0) is bitwise identity before dither.
+    float satUI = clamp(P.knotX4_exposure_sat_gc.z, -100.0, 100.0) * 0.01;
+    float vibUI = clamp(P.colorControls.x, -100.0, 100.0) * 0.01;
+    if (abs(satUI) < 1e-7 && abs(vibUI) < 1e-7) return encoded;
+
+    vec3 rgb = srgbEOTF(encoded);
+    float Y = dot(vec3(0.2126, 0.7152, 0.0722), rgb);
+    vec3 Yv = vec3(Y);
+    vec3 C = rgb - Yv;
+
+    // Normalized chroma occupancy: 0 for neutral, ~1 near an RGB gamut edge.
+    float span = max(rgb.r, max(rgb.g, rgb.b)) - min(rgb.r, min(rgb.g, rgb.b));
+    float peak = max(max(rgb.r, max(rgb.g, rgb.b)), 0.06);
+    float chroma = clamp(span / peak, 0.0, 1.0);
+
+    // Saturation is conventional: -100 => monochrome, 0 => identity,
+    // +100 => nominal 2x opponent chroma before gamut limiting.
+    float satGain = (satUI >= 0.0) ? (1.0 + 0.85 * satUI) : max(0.0, 1.0 + satUI);
+
+    // Vibrance is selective and asymmetric by design. Positive vibrance
+    // prioritizes weak/moderate colors while leaving saturated colors alone.
+    // Negative vibrance removes weak color first and preserves strongly
+    // saturated color longer, matching conventional editor behavior.
+    float vibGain;
+    if (vibUI >= 0.0) {
+        float selective = pow(max(1.0 - chroma, 0.0), 0.30);
+        vibGain = 1.0 + P.colorControls.y * vibUI * selective;
+    } else {
+        float minus100Gain = pow(max(chroma, 0.0), 4.0);
+        vibGain = mix(1.0, minus100Gain, -vibUI);
+    }
+
+    float wantedGain = satGain * vibGain;
+    float gamutGain = maxOpponentGain(Yv, C);
+    float gain = min(wantedGain, gamutGain);
+    vec3 outLinear = Yv + gain * C;
+    return srgbOETF(clamp(outLinear, 0.0, 1.0));
+}
+
+vec3 srgbOETF(vec3 x) {
+    x = clamp(x, 0.0, 1.0);
+    vec3 lo = 12.92 * x;
+    vec3 hi = 1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055;
+    return mix(hi, lo, lessThanEqual(x, vec3(0.0031308)));
+}
+
+void main() {
+#if RAWR_TONEMAP_RAW_INPUT
+    // Cooperative RAW preload must precede the bounds return: every lane in
+    // a partial edge workgroup participates in the same shared-memory barrier.
+    videoLoadTile();
+#endif
+    uvec2 up = gl_GlobalInvocationID.xy;
+    if (up.x >= P.extent.x || up.y >= P.extent.y) return;
+    ivec2 p = ivec2(up);
+
+    // Center crop in the already Bayer-aware reduced linear image. The
+    // ordinary preview has equal extents and keeps its exact old sampling.
+    ivec2 source = p + ivec2((P.extent.zw - P.extent.xy) / 2u);
+#if RAWR_TONEMAP_RAW_INPUT
+    vec3 camera = videoCameraAt(source);
+#else
+    vec3 camera = imageLoad(inputImage, source).rgb;
+#if RAWR_TONEMAP_VIDEO_MONITOR
+    if (P.directRender.x == 0u) camera = applyHighlightTone(camera);
+#endif
+#endif
+    vec3 work = mat3(P.cameraToWorking) * camera;
+
+    vec3 encoded;
+    if (P.directRender.x == 3u) {
+        // LOG is scene-referred: only the capture AE gain applies. No render
+        // exposure, creative controls, SDR shoulder or LUT may alter this curve.
+        encoded = rawrCst(work * exp2(P.renderConfig.y), RAWR_GAMUT_ACESCG_AP1,
+                          RAWR_TF_LINEAR, P.directRender.y, P.directRender.z);
+    } else if (P.directRender.x != 0u) {
+        vec3 linear = work * exp2(P.renderConfig.y + P.knotX4_exposure_sat_gc.y);
+        linear = applySceneLinearHighlightCompression(linear, P.toneControls.y);
+        vec3 srgbLinear = clamp(rawrToSrgbLinear(linear, RAWR_GAMUT_ACESCG_AP1), 0.0, 1.0);
+        // Preserve the direct path exactly when creative controls are neutral.
+        bool adjusted = any(notEqual(P.toneControls, vec4(0.0))) ||
+                        any(notEqual(P.renderConfig.zw, vec2(0.0))) ||
+                        P.knotX4_exposure_sat_gc.z != 0.0 || P.colorControls.x != 0.0;
+        if (adjusted) {
+            encoded = applyOutputColorControls(applyPhotographicToneControls(srgbOETF(srgbLinear)));
+            if (P.directRender.x == 2u) encoded = rawrEncodeTransfer(srgbEOTF(encoded), RAWR_TF_REC709);
+        } else {
+            encoded = P.directRender.x == 2u ? rawrEncodeTransfer(srgbLinear, RAWR_TF_REC709) : srgbOETF(srgbLinear);
+        }
+    } else {
+        // RAWR NTRL technical render. cameraToWorking produces scene-linear AP1.
+        // Exposure and AE post gain stay scene-linear, then the existing CST converts
+        // AP1 linear -> DaVinci Wide Gamut / DaVinci Intermediate exactly once.
+        // The baked LUT outputs encoded sRGB, so there is intentionally no sRGB OETF
+        // after the LUT. CineEI shift in the LUT is 0.00; no legacy +1.375 EV offset.
+        vec3 color = work;
+        float renderExposureEV = P.renderConfig.y + P.knotX4_exposure_sat_gc.y;
+        vec3 renderedLinear = color * exp2(renderExposureEV);
+        renderedLinear = applySceneLinearHighlightCompression(renderedLinear, P.toneControls.y);
+        vec3 rawrNeutralInput = !COMBINE_NEUTRAL_GAMUT
+            ? rawrCst(renderedLinear, RAWR_GAMUT_ACESCG_AP1, RAWR_TF_LINEAR, RAWR_GAMUT_DWG, RAWR_TF_DAVINCI_INTERMEDIATE)
+            : rawrTonemapCst(renderedLinear, RAWR_GAMUT_ACESCG_AP1, RAWR_TF_LINEAR, RAWR_GAMUT_DWG, RAWR_TF_DAVINCI_INTERMEDIATE, P.neutralGamut);
+        vec3 rawrNeutral = sampleRawrNeutralTechnical(rawrNeutralInput);
+        encoded = rawrNeutral;
+
+        // A render-transform user LUT starts from scene-linear AP1 and replaces RAWR
+        // NTRL as the render transform. A post-render LUT starts from Rawr's
+        // encoded sRGB result. In both cases the user's declared input/output color
+        // spaces drive only the boundary CSTs; there is never an implicit CST
+        // between LUT stages. Intensity is blended in Rawr's encoded-sRGB downstream
+        // space, so 0 is an exact Rawr Neutral bypass even when LUT spaces differ.
+        if (P.lutControl.x != 0u && P.lutControl.y > 0u && P.lutBlend.x > 0.0 && P.lutOutput.z == 0u) {
+            vec3 lutIn = rawrUserCst(renderedLinear, RAWR_GAMUT_ACESCG_AP1, RAWR_TF_LINEAR, P.lutControl.z, P.lutControl.w, P.userInputGamut);
+            vec3 lutOut = rawrEvaluateUserLutChain(lutIn);
+            vec3 lutSrgb = P.lutOutput.w == 0u
+                               ? lutOut
+                               : rawrUserCst(lutOut, P.lutOutput.x, P.lutOutput.y, RAWR_GAMUT_SRGB_REC709, RAWR_TF_SRGB, P.userOutputGamut);
+            encoded = mix(rawrNeutral, lutSrgb, clamp(P.lutBlend.x, 0.0, 1.0));
+        }
+
+        encoded = applyPhotographicToneControls(encoded);
+        encoded = applyOutputColorControls(encoded);
+
+        if (P.lutControl.x != 0u && P.lutControl.y > 0u && P.lutBlend.x > 0.0 && P.lutOutput.z == 1u) {
+            vec3 beforeLut = encoded;
+            vec3 lutIn = rawrUserCst(beforeLut, RAWR_GAMUT_SRGB_REC709, RAWR_TF_SRGB, P.lutControl.z, P.lutControl.w, P.userInputGamut);
+            vec3 lutOut = rawrEvaluateUserLutChain(lutIn);
+            vec3 lutSrgb = P.lutOutput.w == 0u
+                               ? lutOut
+                               : rawrUserCst(lutOut, P.lutOutput.x, P.lutOutput.y, RAWR_GAMUT_SRGB_REC709, RAWR_TF_SRGB, P.userOutputGamut);
+            encoded = mix(beforeLut, lutSrgb, clamp(P.lutBlend.x, 0.0, 1.0));
+        }
+    }
+
+    // The high-precision recording variant leaves quantization and dither to
+    // the final GPU RGB-to-10-bit-YCbCr stage. Preview retains its 8-bit dither.
+#if RAWR_TONEMAP_OUTPUT_RGB10A2
+    encoded = clamp(encoded + vec3(outputDither(up) * (255.0 / 1023.0)), 0.0, 1.0);
+#elif !RAWR_TONEMAP_OUTPUT_RGBA16F && !RAWR_TONEMAP_OUTPUT_RGBA32F
+    encoded = clamp(encoded + vec3(outputDither(up)), 0.0, 1.0);
+#endif
+    imageStore(outputImage, p, vec4(encoded, 1.0));
+#if RAWR_TONEMAP_RAW_INPUT
+    if (pc.monitorEnabled != 0u)
+        imageStore(monitorImage, p, vec4(clamp(encoded + vec3(outputDither(up)), 0.0, 1.0), 1.0));
+#elif RAWR_TONEMAP_VIDEO_MONITOR
+    if (videoMonitor.monitorEnabled != 0u)
+        imageStore(monitorImage, p, vec4(clamp(encoded + vec3(outputDither(up)), 0.0, 1.0), 1.0));
+#endif
+}

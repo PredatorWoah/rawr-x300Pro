@@ -1,0 +1,165 @@
+{
+  "oracle": "denoiseprofile_oracle.py (DT denoiseprofile wavelets/Y0U0V0/new-VST)",
+  "precision": "float32",
+  "force_y": 0.25,
+  "force_uv": 0.75,
+  "bias": 0.0,
+  "fixtures": [
+    {
+      "stem": "RAWR_20260926_000415_161",
+      "tuning": "s1_sh1",
+      "crop": [
+        512,
+        512
+      ],
+      "origin": [
+        1020,
+        2040
+      ],
+      "channels": 4,
+      "strength": 1.0,
+      "shadows": 1.0,
+      "wb": [
+        2.226085662841797,
+        1.0,
+        1.689768671989441
+      ],
+      "a_norm": 4.29875541385627e-07,
+      "b_norm": 5.725716434312744e-08,
+      "scales": 6,
+      "input": "RAWR_20260926_000415_161_crop_input.f32",
+      "output": "RAWR_20260926_000415_161_s1_sh1_output.f32",
+      "dng": "RAWR_20260926_000415_161.dng"
+    },
+    {
+      "stem": "RAWR_20260926_000415_161",
+      "tuning": "s2_sh1",
+      "crop": [
+        512,
+        512
+      ],
+      "origin": [
+        1020,
+        2040
+      ],
+      "channels": 4,
+      "strength": 2.0,
+      "shadows": 1.0,
+      "wb": [
+        2.226085662841797,
+        1.0,
+        1.689768671989441
+      ],
+      "a_norm": 4.29875541385627e-07,
+      "b_norm": 5.725716434312744e-08,
+      "scales": 6,
+      "input": "RAWR_20260926_000415_161_crop_input.f32",
+      "output": "RAWR_20260926_000415_161_s2_sh1_output.f32",
+      "dng": "RAWR_20260926_000415_161.dng"
+    },
+    {
+      "stem": "RAWR_20260926_000643_129",
+      "tuning": "s1_sh1",
+      "crop": [
+        512,
+        512
+      ],
+      "origin": [
+        1020,
+        2040
+      ],
+      "channels": 4,
+      "strength": 1.0,
+      "shadows": 1.0,
+      "wb": [
+        2.1740972995758057,
+        1.0,
+        1.7239060401916504
+      ],
+      "a_norm": 3.3988655445682525e-07,
+      "b_norm": 4.527109354057757e-08,
+      "scales": 6,
+      "input": "RAWR_20260926_000643_129_crop_input.f32",
+      "output": "RAWR_20260926_000643_129_s1_sh1_output.f32",
+      "dng": "RAWR_20260926_000643_129.dng"
+    },
+    {
+      "stem": "RAWR_20260926_000643_129",
+      "tuning": "s2_sh1",
+      "crop": [
+        512,
+        512
+      ],
+      "origin": [
+        1020,
+        2040
+      ],
+      "channels": 4,
+      "strength": 2.0,
+      "shadows": 1.0,
+      "wb": [
+        2.1740972995758057,
+        1.0,
+        1.7239060401916504
+      ],
+      "a_norm": 3.3988655445682525e-07,
+      "b_norm": 4.527109354057757e-08,
+      "scales": 6,
+      "input": "RAWR_20260926_000643_129_crop_input.f32",
+      "output": "RAWR_20260926_000643_129_s2_sh1_output.f32",
+      "dng": "RAWR_20260926_000643_129.dng"
+    },
+    {
+      "stem": "RAWR_20260926_000405_865",
+      "tuning": "s1_sh1",
+      "crop": [
+        512,
+        512
+      ],
+      "origin": [
+        1024,
+        2040
+      ],
+      "channels": 4,
+      "strength": 1.0,
+      "shadows": 1.0,
+      "wb": [
+        2.188035249710083,
+        1.0,
+        1.8788976669311523
+      ],
+      "a_norm": 1.559992483635142e-06,
+      "b_norm": 1.04011938617532e-07,
+      "scales": 6,
+      "input": "RAWR_20260926_000405_865_crop_input.f32",
+      "output": "RAWR_20260926_000405_865_s1_sh1_output.f32",
+      "dng": "RAWR_20260926_000405_865.dng"
+    },
+    {
+      "stem": "RAWR_20260926_000405_865",
+      "tuning": "s2_sh1",
+      "crop": [
+        512,
+        512
+      ],
+      "origin": [
+        1024,
+        2040
+      ],
+      "channels": 4,
+      "strength": 2.0,
+      "shadows": 1.0,
+      "wb": [
+        2.188035249710083,
+        1.0,
+        1.8788976669311523
+      ],
+      "a_norm": 1.559992483635142e-06,
+      "b_norm": 1.04011938617532e-07,
+      "scales": 6,
+      "input": "RAWR_20260926_000405_865_crop_input.f32",
+      "output": "RAWR_20260926_000405_865_s2_sh1_output.f32",
+      "dng": "RAWR_20260926_000405_865.dng"
+    }
+  ]
+}

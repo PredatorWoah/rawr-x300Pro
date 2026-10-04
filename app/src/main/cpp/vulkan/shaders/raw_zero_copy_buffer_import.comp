@@ -1,0 +1,43 @@
+#version 450
+// Buffer-view zero-copy parity (diagnostic mode 16). Compares byte-addressed
+// reads of the imported camera AHB (bound as a storage buffer, bypassing
+// sampler pitch granularity) against the bridge-owned R16 reference image.
+// Full-frame, bit-exact: a PASS proves the buffer path reads true sensor
+// data on every lens regardless of row stride.
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, r16ui) uniform readonly uimage2D referenceRaw;
+layout(std430, set = 0, binding = 1) readonly buffer ImportedRawBuffer { uint words[]; } importedRaw;
+layout(std430, set = 0, binding = 2) buffer ProbeOutput { uint words[]; } probe;
+
+layout(push_constant) uniform ProbePush {
+    uint rawWidth;
+    uint rawHeight;
+    uint stridePixels;
+    uint reserved;
+}
+pc;
+
+void accumulate(uint actual, uint expected, uint x, uint y) {
+    if (actual == expected) return;
+    uint delta = actual > expected ? actual - expected : expected - actual;
+    atomicAdd(probe.words[0u], 1u);
+    atomicMax(probe.words[1u], delta);
+    atomicAdd(probe.words[2u + ((y & 1u) << 1u) + (x & 1u)], 1u);
+    atomicMin(probe.words[6u], y * pc.rawWidth + x);
+}
+
+void main() {
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+    if (x >= pc.rawWidth || y >= pc.rawHeight) return;
+
+    uint expected = imageLoad(referenceRaw, ivec2(int(x), int(y))).r;
+    // AHB rows are stridePixels uint16 samples; two samples per uint32 word.
+    // Dispatch bounds guarantee linear < stridePixels * rawHeight, which the
+    // importer verified fits inside the AHB allocation.
+    uint linear = y * pc.stridePixels + x;
+    uint word = importedRaw.words[linear >> 1u];
+    uint actual = ((linear & 1u) == 0u) ? (word & 0xffffu) : (word >> 16u);
+    accumulate(actual, expected, x, y);
+}

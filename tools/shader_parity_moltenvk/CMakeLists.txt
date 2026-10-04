@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22)
+project(shader_parity_moltenvk LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(Vulkan REQUIRED)
+add_executable(image_pass_parity image_pass_parity.cpp)
+target_include_directories(image_pass_parity PRIVATE ../../native/vk_common/testing)
+target_link_libraries(image_pass_parity PRIVATE Vulkan::Vulkan)
+target_compile_options(image_pass_parity PRIVATE -O2 -Wall -Wextra -Werror -Wno-missing-field-initializers)

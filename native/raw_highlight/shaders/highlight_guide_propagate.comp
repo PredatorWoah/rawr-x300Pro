@@ -1,0 +1,45 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(binding = 0, rgba16f) uniform readonly image2D srcGuide;
+layout(binding = 1, rgba16f) uniform writeonly image2D dstGuide;
+layout(push_constant) uniform Pc {
+    uint width;
+    uint height;
+    uint stepSize;
+    uint pad;
+}
+pc;
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    vec4 center = imageLoad(srcGuide, p);
+
+    // Original seeds remain authoritative. Empty and previously propagated
+    // cells are filled from every available direction instead of selecting a
+    // target-dependent ray, producing one stable field for the whole image.
+    if (center.a < 0.0) {
+        imageStore(dstGuide, p, center);
+        return;
+    }
+
+    const ivec2 dirs[8] = ivec2[8](ivec2(-1, -1), ivec2(0, -1), ivec2(1, -1), ivec2(-1, 0), ivec2(1, 0), ivec2(-1, 1),
+                                   ivec2(0, 1), ivec2(1, 1));
+    vec3 sum = vec3(0.0);
+    float weight = 0.0;
+    if (dot(center.rgb, vec3(1.0)) > 1e-6) {
+        sum += center.rgb * 2.0;
+        weight += 2.0;
+    }
+    int jump = int(pc.stepSize);
+    for (int i = 0; i < 8; ++i) {
+        ivec2 q = p + dirs[i] * jump;
+        if (any(lessThan(q, ivec2(0))) || q.x >= int(pc.width) || q.y >= int(pc.height)) continue;
+        vec4 candidate = imageLoad(srcGuide, q);
+        if (dot(candidate.rgb, vec3(1.0)) <= 1e-6) continue;
+        float w = dirs[i].x != 0 && dirs[i].y != 0 ? 0.70710678 : 1.0;
+        sum += candidate.rgb * w;
+        weight += w;
+    }
+    imageStore(dstGuide, p, weight > 0.0 ? vec4(sum / weight, center.a) : vec4(vec3(0.0), center.a));
+}

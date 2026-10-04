@@ -1,0 +1,21 @@
+#version 450
+// RawTherapee's analytic highlight compression factor, adapted to normalized
+// camera RGB. This only feeds the SDR renderer; the HDR gainmap tap is intact.
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(set = 0, binding = 0, rgba16f) uniform readonly image2D sourceRgb;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D targetRgb;
+layout(push_constant) uniform Params { uint width, height; float compression, exposureGain; } p;
+float factor(float level) {
+    if (p.compression <= 0.0 || level <= 0.0) return 1.0;
+    float shoulder = 0.1 / 65536.0;
+    float scaled = max(level - shoulder, 0.0) * p.compression / (1.0 - shoulder);
+    return scaled > 1e-7 ? log(1.0 + scaled) / scaled : 1.0;
+}
+void main() {
+    ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+    if (xy.x >= int(p.width) || xy.y >= int(p.height)) return;
+    vec4 value = imageLoad(sourceRgb, xy);
+    vec3 exposed = value.rgb * p.exposureGain;
+    float scale = (factor(exposed.r) + factor(exposed.g) + factor(exposed.b)) / 3.0;
+    imageStore(targetRgb, xy, vec4(value.rgb * scale, value.a));
+}

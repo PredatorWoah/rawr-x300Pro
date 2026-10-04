@@ -1,0 +1,38 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D externalRaw;
+layout(set = 0, binding = 1, r16ui) uniform readonly uimage2D referenceRawImage;
+layout(std430, set = 0, binding = 2) buffer ProbeOutput { uint words[]; }
+probe;
+
+layout(push_constant) uniform ExternalPush {
+    uint rawWidth;
+    uint rawHeight;
+    uint statsBase;
+    uint reserved;
+}
+pc;
+
+void main() {
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+    if (x >= pc.rawWidth || y >= pc.rawHeight) return;
+
+    // External-format images are sampled through the mandatory YCbCr-conversion
+    // sampler path. The diagnostic explicitly tests RGB_IDENTITY + ITU_FULL
+    // because exact RAW recovery cannot tolerate narrow-range expansion.
+    // Interpret R as a normalized 16-bit scalar and test exact reconstruction.
+    vec2 uv = (vec2(float(x), float(y)) + vec2(0.5)) / vec2(float(pc.rawWidth), float(pc.rawHeight));
+    float sampledFloat = textureLod(externalRaw, uv, 0.0).r;
+    uint sampled = uint(round(clamp(sampledFloat, 0.0, 1.0) * 65535.0));
+    uint expected = imageLoad(referenceRawImage, ivec2(int(x), int(y))).r;
+    if (sampled == expected) return;
+
+    uint base = pc.statsBase;
+    uint delta = sampled > expected ? sampled - expected : expected - sampled;
+    atomicAdd(probe.words[base + 0u], 1u);
+    atomicMax(probe.words[base + 1u], delta);
+    atomicAdd(probe.words[base + 2u + ((y & 1u) << 1u) + (x & 1u)], 1u);
+    atomicMin(probe.words[base + 6u], y * pc.rawWidth + x);
+}

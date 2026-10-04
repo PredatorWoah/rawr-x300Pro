@@ -1,0 +1,114 @@
+#version 450
+// RawTherapee calcContrastThreshold() and final second-pass refinement selection.
+// One workgroup evaluates thresholds c=1..99 in parallel; each invocation preserves RT's
+// per-threshold sequential pixel accumulation order.
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+layout(binding = 2, r32f) uniform readonly image2D lum;
+layout(binding = 4, r32f) uniform readonly image2D statsIn;
+layout(std430, binding = 5) buffer AutoState {
+    float resolvedThreshold;
+    float minVariance80;
+    float minVariance40;
+    float refinedVariance;
+    uint chosenPass;
+    uint tileX;
+    uint tileY;
+    uint tileSize;
+}
+state;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    float threshold;
+    float outputFactor;
+    float outputAlpha;
+    float b1;
+    float b2;
+    float b3;
+    float B;
+    float m00;
+    float m01;
+    float m02;
+    float m10;
+    float m11;
+    float m12;
+    float m20;
+    float m21;
+    float m22;
+    uint autoContrast;
+    uint autoPass;
+}
+pc;
+shared float sums[100];
+shared uint sx, sy, ssize, valid;
+float statAt(uint idx) { return imageLoad(statsIn, ivec2(int(idx % pc.width), int(idx / pc.width))).r; }
+float L(ivec2 p) { return imageLoad(lum, p).r; }
+float sq(float x) { return x * x; }
+float blendFactor(float val, float threshold) {
+    float x = -16.0 + (16.0 / threshold) * val;
+    return 0.5 * (1.0 + x / sqrt(1.0 + x * x));
+}
+void main() {
+    uint tid = gl_LocalInvocationID.x;
+    if (tid == 0u) {
+        valid = 1u;
+        sx = state.tileX;
+        sy = state.tileY;
+        ssize = state.tileSize;
+        if (state.chosenPass == 1u) {
+            int startX = max(int(state.tileX) - 10, 0), startY = max(int(state.tileY) - 10, 0);
+            int endX = min(int(state.tileX) + 10, int(pc.width) - 40),
+                endY = min(int(state.tileY) + 10, int(pc.height) - 40);
+            uint nw = uint(endX - startX + 1), nh = uint(endY - startY + 1);
+            float best = 3.402823466e+38;
+            uint bestIdx = 0u;
+            uint pass1Base = (pc.width / 80u) * (pc.height / 80u);
+            uint refineBase = pass1Base + (pc.width / 10u - 3u) * (pc.height / 10u - 3u);
+            for (uint i = 0u; i < nw * nh; ++i) {
+                float v = statAt(refineBase + i);
+                if (v < best) {
+                    best = v;
+                    bestIdx = i;
+                }
+            }
+            state.refinedVariance = best;
+            if (best <= 8.0) {
+                sx = uint(startX) + bestIdx % nw;
+                sy = uint(startY) + bestIdx / nw;
+                ssize = 40u;
+                state.tileX = sx;
+                state.tileY = sy;
+                state.tileSize = 40u;
+            } else
+                valid = 0u;
+        }
+        if (valid == 0u) state.resolvedThreshold = 0.0;
+    }
+    barrier();
+    if (valid == 0u) return;
+    uint c = tid + 1u;
+    if (c <= 99u) {
+        float threshold = float(c) / 100.0;
+        float sum = 0.0;
+        float scale = 0.0625 / 327.68;
+        for (uint y = 2u; y < ssize - 2u; ++y)
+            for (uint x = 2u; x < ssize - 2u; ++x) {
+                ivec2 p = ivec2(int(sx + x), int(sy + y));
+                float contrast =
+                    sqrt(sq(L(p + ivec2(1, 0)) - L(p - ivec2(1, 0))) + sq(L(p + ivec2(0, 1)) - L(p - ivec2(0, 1))) +
+                         sq(L(p + ivec2(2, 0)) - L(p - ivec2(2, 0))) + sq(L(p + ivec2(0, 2)) - L(p - ivec2(0, 2)))) *
+                    scale;
+                sum += blendFactor(contrast, threshold);
+            }
+        sums[c] = sum;
+    }
+    barrier();
+    if (tid == 0u) {
+        float limit = float((ssize - 4u) * (ssize - 4u)) / 100.0;
+        uint c = 1u;
+        for (; c < 100u; ++c)
+            if (sums[c] <= limit) break;
+        // RT returns (c+1)/100. Preserve that internal result, including the theoretical 1.01 edge.
+        state.resolvedThreshold = float(c + 1u) / 100.0;
+    }
+}

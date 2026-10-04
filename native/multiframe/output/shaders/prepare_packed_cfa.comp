@@ -1,0 +1,65 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Packs the merged camera RGB back into the still demosaicer's input contract
+// (raw_demosaic sensor_clip_pack): one RGBA16F texel per 2x2 CFA cell holding
+// (R, G1, G2, B) normalized, clamped to [0, 1] and lens-shading corrected,
+// plus the per-site clip bits taken before LSC. Each site keeps only its own
+// channel of the merge, so the demosaicer reconstructs the missing colours
+// from a merged, low-noise mosaic instead of the merge's per-channel kernel
+// regression (which is softer on fine texture). Values stay float: an
+// integer RAW projection would quantize the merge's sub-code shadow detail.
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(binding = 0, rgba16f) readonly uniform image2D mergedRgb;
+layout(binding = 1, rgba16f) writeonly uniform image2D packedCfa;
+layout(binding = 2, r16ui) writeonly uniform uimage2D clipState;
+// Optional reference-frame sensor evidence (1A), as in prepare_rgb.comp.
+layout(binding = 4, r16ui) readonly uniform uimage2D refRaw;
+layout(push_constant) uniform P {
+    uint width, height, lscWidth, lscHeight;
+    uint refWidth, refHeight, cfa, useSensorClip;
+    vec4 black;
+    vec4 invRange;
+    float clipThreshold;
+} p;
+#define LSC_BINDING 3
+#define LSC_ENABLED (p.lscWidth >= 2u && p.lscHeight >= 2u)
+#define LSC_GRID_SIZE uvec2(p.lscWidth, p.lscHeight)
+#define LSC_SENSOR_SIZE uvec2(p.width, p.height)
+#include "lens_shading.glsl"
+#include "cfa_common.glsl"
+
+uint sensorClipForCell(ivec2 cell) {
+    ivec2 qr, qg1, qg2, qb;
+    rawrCfaCellCoordinates(p.cfa, cell, qr, qg1, qg2, qb);
+    float r = clamp((float(imageLoad(refRaw, qr).r) - p.black[0]) * p.invRange[0], 0.0, 1.0);
+    float g1 = clamp((float(imageLoad(refRaw, qg1).r) - p.black[1]) * p.invRange[1], 0.0, 1.0);
+    float g2 = clamp((float(imageLoad(refRaw, qg2).r) - p.black[2]) * p.invRange[2], 0.0, 1.0);
+    float b = clamp((float(imageLoad(refRaw, qb).r) - p.black[3]) * p.invRange[3], 0.0, 1.0);
+    return (r >= p.clipThreshold ? 1u : 0u) | (g1 >= p.clipThreshold ? 2u : 0u) |
+           (g2 >= p.clipThreshold ? 4u : 0u) | (b >= p.clipThreshold ? 8u : 0u);
+}
+
+float site(ivec2 q, int rgbChannel, out bool clipped) {
+    float v = imageLoad(mergedRgb, q)[rgbChannel];
+    bool invalid = isnan(v) || isinf(v);
+    clipped = invalid || v >= .995;
+    return invalid ? 0.0 : clamp(v, 0.0, 1.0);
+}
+
+void main() {
+    ivec2 cell = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(cell, imageSize(packedCfa)))) return;
+    ivec2 qr, qg1, qg2, qb;
+    rawrCfaCellCoordinates(p.cfa, cell, qr, qg1, qg2, qb);
+    bool cr, cg1, cg2, cb;
+    float r = site(qr, 0, cr), g1 = site(qg1, 1, cg1), g2 = site(qg2, 1, cg2), b = site(qb, 2, cb);
+    uint mask = (cr ? 1u : 0u) | (cg1 ? 2u : 0u) | (cg2 ? 4u : 0u) | (cb ? 8u : 0u);
+    // 1A: OR reference sensor truth when geometry matches (scale 1x).
+    if (p.useSensorClip != 0u && p.refWidth == p.width && p.refHeight == p.height) {
+        mask |= sensorClipForCell(cell);
+    }
+    imageStore(packedCfa, cell,
+               vec4(r * lensShadingGain(qr, 0), g1 * lensShadingGain(qg1, 1), g2 * lensShadingGain(qg2, 1),
+                    b * lensShadingGain(qb, 3)));
+    imageStore(clipState, cell, uvec4(mask, 0, 0, 0));
+}

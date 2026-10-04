@@ -1,0 +1,25 @@
+#version 450
+
+// TEMPORARY debug: buffer->buffer passthrough on the core layout.
+layout(local_size_x = 32, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer SourcePixels {
+  vec4 src[];
+};
+
+layout(std430, binding = 1) writeonly buffer DestinationPixels {
+  vec4 dst[];
+};
+
+layout(push_constant) uniform CorePush {
+  uint width;
+  uint height;
+} params;
+
+void main() {
+  const uvec2 gid = gl_GlobalInvocationID.xy;
+  if (gid.x >= params.width || gid.y >= params.height) {
+    return;
+  }
+  dst[gid.y * params.width + gid.x] = src[gid.y * params.width + gid.x];
+}

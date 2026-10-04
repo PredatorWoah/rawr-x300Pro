@@ -1,0 +1,254 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#ifndef RAWR_BENCH_BYPASS_HIGHLIGHT
+#define RAWR_BENCH_BYPASS_HIGHLIGHT 0
+#endif
+#ifndef RAWR_BENCH_BYPASS_CHROMA
+#define RAWR_BENCH_BYPASS_CHROMA 0
+#endif
+#ifndef RAWR_BENCH_MINIMAL_DIRECT
+#define RAWR_BENCH_MINIMAL_DIRECT 0
+#endif
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0, r16ui) uniform readonly uimage2D rawImage;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D outImage;
+// Byte-addressed view of the same camera AHB (diagnostic buffer-import path).
+// Bypasses sampler pitch granularity: the shader computes y * stride + x
+// itself, so odd strides (e.g. 4080x16bpp rows) read exactly.
+layout(std430, set = 0, binding = 3) readonly buffer ImportedRawBuffer { uint words[]; } importedRaw;
+layout(push_constant) uniform PC {
+    vec4 black;
+    vec4 invRange;
+    vec4 wb;
+    float clipThreshold;
+    float edgeStrength;
+    float chromaBlend;
+    float highlightWarningThreshold;
+    float shadowWarningThreshold;
+    float pad0;
+    uint width;
+    uint height;
+    uint pattern;
+    uint lscEnabled;
+    uint lscWidth;
+    uint lscHeight;
+    uint highlightReconstructionEnabled;
+    uint rawStridePixels;
+    uint rawBufferEnabled;
+}
+pc;
+#define LSC_BINDING 2
+#include "lens_shading.glsl"
+#include "cfa_common.glsl"
+
+struct BayerCell {
+    vec3 rgb;
+    uint validMask;
+};
+shared vec4 sCell[100];  // rgb + mask encoded in a
+bool isChannelValid(BayerCell c, int ch) { return (c.validMask & (1u << uint(ch))) != 0u; }
+
+float normalizeSensorSample(ivec2 q, int c) {
+    uint v;
+    if (pc.rawBufferEnabled != 0u) {
+        uint linear = uint(q.y) * pc.rawStridePixels + uint(q.x);
+        uint word = importedRaw.words[linear >> 1u];
+        v = ((linear & 1u) == 0u) ? (word & 0xffffu) : (word >> 16u);
+    } else {
+        v = imageLoad(rawImage, q).r;
+    }
+    return clamp((float(v) - pc.black[c]) * pc.invRange[c], 0.0, 1.0);
+}
+
+
+BayerCell loadBayerCell(ivec2 cell) {
+    ivec2 outputSize = ivec2(int(pc.width >> 1), int(pc.height >> 1));
+    cell = clamp(cell, ivec2(0), outputSize - ivec2(1));
+    ivec2 qr, qg1, qg2, qb;
+    rawrCfaCellCoordinates(pc.pattern, cell, qr, qg1, qg2, qb);
+    float rr = normalizeSensorSample(qr, 0);
+    float gg1 = normalizeSensorSample(qg1, 1);
+    float gg2 = normalizeSensorSample(qg2, 2);
+    float bb = normalizeSensorSample(qb, 3);
+
+    // Sensor clipping is classified before applying LSC. The values themselves are
+    // then moved into the lens-corrected linear domain before reconstruction/chroma.
+    bool vr = rr < pc.clipThreshold;
+    bool v1 = gg1 < pc.clipThreshold;
+    bool v2 = gg2 < pc.clipThreshold;
+    bool vb = bb < pc.clipThreshold;
+    rr *= lensShadingGain(qr, 0);
+    gg1 *= lensShadingGain(qg1, 1);
+    gg2 *= lensShadingGain(qg2, 1);
+    bb *= lensShadingGain(qb, 3);
+
+    // RGB formation is independent of the recovery mode. Do not substitute the
+    // unclipped green sample here: that is a pre-RGB reconstruction and makes
+    // the G1/G2 clipping boundary visible. Highlight handling happens only
+    // after this ordinary 2x2 average and white balance.
+    float g = 0.5 * (gg1 + gg2);
+    uint mask = (vr ? 1u : 0u) | ((v1 || v2) ? 2u : 0u) | (vb ? 4u : 0u);
+    uint clipState = (!vr ? 1u : 0u) | (!v1 ? 2u : 0u) | (!v2 ? 4u : 0u) | (!vb ? 8u : 0u);
+    return BayerCell(vec3(rr, g, bb), mask | (clipState << 3));
+}
+
+BayerCell loadTileCell(ivec2 d) {
+    ivec2 p = ivec2(gl_LocalInvocationID.xy) + ivec2(1) + d;
+    vec4 q = sCell[p.y * 10 + p.x];
+    return BayerCell(q.rgb, uint(q.a + 0.5));
+}
+
+float edgeWeight(float a, float b) { return 1.0 / (1.0 + pc.edgeStrength * abs(a - b)); }
+
+vec3 clipStateRgb(uint state) {
+    return vec3((state & 1u) != 0u ? 1.0 : 0.0,
+                0.5 * float(((state & 2u) != 0u ? 1u : 0u) + ((state & 4u) != 0u ? 1u : 0u)),
+                (state & 8u) != 0u ? 1.0 : 0.0);
+}
+
+
+#include "raw_highlight_post_rgb.glsl"
+
+vec4 previewHighlightColorGuide(ivec2 p, vec3 center, vec3 centerClipped, vec3 channelCeilings) {
+    // Preview uses a sparse local version of the still guide. The bounded
+    // neighborhood keeps large clipped regions inside the live-frame budget;
+    // the still path retains the broader 16-angle search.
+    const vec2 directions[8] =
+        vec2[8](vec2(1.0000000, 0.0000000), vec2(0.7071068, 0.7071068), vec2(0.0000000, 1.0000000),
+                vec2(-0.7071068, 0.7071068), vec2(-1.0000000, 0.0000000), vec2(-0.7071068, -0.7071068),
+                vec2(0.0000000, -1.0000000), vec2(0.7071068, -0.7071068));
+    const int radii[4] = int[4](1, 4, 16, 64);
+    ivec2 extent = ivec2(int(pc.width >> 1), int(pc.height >> 1));
+    vec3 reliability = clamp(vec3(1.0) - centerClipped, vec3(0.0), vec3(1.0));
+    vec3 centerKnown = center * reliability;
+    float centerKnownSum = max(rawrHighlightSum(centerKnown), 1e-6);
+    centerKnown /= centerKnownSum;
+    vec3 accumulated = vec3(0.0);
+    float accumulatedWeight = 0.0;
+    float gwb = 0.5 * (pc.wb.y + pc.wb.z);
+    for (int direction = 0; direction < 8; ++direction) {
+        for (int radiusIndex = 0; radiusIndex < 4; ++radiusIndex) {
+            int radius = radii[radiusIndex];
+            ivec2 q = p + ivec2(round(directions[direction] * float(radius)));
+            if (any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, extent))) continue;
+            BayerCell sampleCell = loadBayerCell(q);
+            vec3 sampleClipped = clipStateRgb(sampleCell.validMask >> 3);
+            if (rawrHighlightMaximum(sampleClipped) > 1e-6) continue;
+            ivec2 ql = clamp(q + ivec2(-1, 0), ivec2(0), extent - ivec2(1));
+            ivec2 qr = clamp(q + ivec2(1, 0), ivec2(0), extent - ivec2(1));
+            ivec2 qu = clamp(q + ivec2(0, -1), ivec2(0), extent - ivec2(1));
+            ivec2 qd = clamp(q + ivec2(0, 1), ivec2(0), extent - ivec2(1));
+            BayerCell leftCell = loadBayerCell(ql);
+            BayerCell rightCell = loadBayerCell(qr);
+            BayerCell upCell = loadBayerCell(qu);
+            BayerCell downCell = loadBayerCell(qd);
+            if (rawrHighlightMaximum(clipStateRgb(leftCell.validMask >> 3)) > 1e-6 ||
+                rawrHighlightMaximum(clipStateRgb(rightCell.validMask >> 3)) > 1e-6 ||
+                rawrHighlightMaximum(clipStateRgb(upCell.validMask >> 3)) > 1e-6 ||
+                rawrHighlightMaximum(clipStateRgb(downCell.validMask >> 3)) > 1e-6)
+                continue;
+            vec3 sampleRgb = rawrHighlightSanitize(sampleCell.rgb * vec3(pc.wb.x, gwb, pc.wb.w));
+            float normalizedPeak = rawrHighlightMaximum(sampleRgb / max(channelCeilings, vec3(1e-4)));
+            if (normalizedPeak < 0.70 || normalizedPeak > 1.10) continue;
+            float sampleSum = rawrHighlightSum(sampleRgb);
+            if (sampleSum <= 1e-6) continue;
+            vec3 lr = (leftCell.rgb - rightCell.rgb) * vec3(pc.wb.x, gwb, pc.wb.w);
+            vec3 ud = (upCell.rgb - downCell.rgb) * vec3(pc.wb.x, gwb, pc.wb.w);
+            float variation = max(rawrHighlightMaximum(abs(lr)), rawrHighlightMaximum(abs(ud))) / sampleSum;
+            if (variation > 0.08) continue;
+            vec3 chroma = sampleRgb / sampleSum;
+            vec3 sampleKnown = sampleRgb * reliability;
+            float sampleKnownSum = max(rawrHighlightSum(sampleKnown), 1e-6);
+            sampleKnown /= sampleKnownSum;
+            float hueError = dot(centerKnown - sampleKnown, centerKnown - sampleKnown);
+            float levelError = abs(log2(max(centerKnownSum, 1e-6) / max(sampleKnownSum, 1e-6)));
+            float weight = normalizedPeak * normalizedPeak /
+                           ((1.0 + 0.02 * float(radius)) * (1.0 + 32.0 * hueError + 0.35 * levelError));
+            accumulated += chroma * weight;
+            accumulatedWeight += weight;
+        }
+    }
+    return accumulatedWeight > 1e-6 ? vec4(accumulated / accumulatedWeight, 1.0) : vec4(0.0);
+}
+
+void main() {
+    ivec2 o = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 os = ivec2(int(pc.width >> 1), int(pc.height >> 1));
+#if RAWR_BENCH_MINIMAL_DIRECT
+    if (any(greaterThanEqual(o, os))) return;
+    // Diagnostic-only floor: direct 2x2 CFA bin + WB. No shared tile, reconstruction, or chroma stabilization.
+    BayerCell direct = loadBayerCell(o);
+    float directGwb = 0.5 * (pc.wb.y + pc.wb.z);
+    imageStore(outImage, o, vec4(max(direct.rgb, vec3(0.0)) * vec3(pc.wb.x, directGwb, pc.wb.w), 1.0));
+    return;
+#else
+    uint lid = gl_LocalInvocationIndex;
+    ivec2 groupOrigin = ivec2(gl_WorkGroupID.xy) * 8 - ivec2(1);
+    // Cooperative 10x10 cell tile load. 100 cells / 64 threads => 1-2 loads per invocation.
+    for (uint i = lid; i < 100u; i += 64u) {
+        ivec2 t = ivec2(int(i % 10u), int(i / 10u));
+        BayerCell c = loadBayerCell(groupOrigin + t);
+        sCell[i] = vec4(c.rgb, float(c.validMask));
+    }
+    barrier();
+    // Every invocation must reach the barrier. Returning before it leaves edge
+    // workgroups partially initialized when output dimensions are not /8.
+    if (any(greaterThanEqual(o, os))) return;
+
+    BayerCell rawCenter = loadTileCell(ivec2(0));
+    uint centerClipState = rawCenter.validMask >> 3;
+    uint originalMask = rawCenter.validMask & 7u;
+    rawCenter.validMask = originalMask;
+    BayerCell c = rawCenter;
+
+    // Edge-aware chroma-difference stabilization. Green remains the local 2-green bin;
+    // only R-G/B-G are lightly averaged, reducing color shimmer without blurring luminance edges.
+    float rg0 = c.rgb.r - c.rgb.g, bg0 = c.rgb.b - c.rgb.g;
+    float rg = rg0, bg = bg0;
+#if !RAWR_BENCH_BYPASS_CHROMA
+    // Apply neighborhood chroma stabilization only to fully valid sensor cells.
+    // Reconstructed highlights retain their reconstruction result without raw-neighbor feedback.
+    if (originalMask == 7u && pc.chromaBlend > 0.0) {
+        float rgSum = 0.0, rgW = 0.0, bgSum = 0.0, bgW = 0.0;
+        const ivec2 dirs[4] = ivec2[4](ivec2(0, -1), ivec2(-1, 0), ivec2(1, 0), ivec2(0, 1));
+        for (int i = 0; i < 4; i++) {
+            BayerCell n = loadTileCell(dirs[i]);
+            float w = edgeWeight(c.rgb.g, n.rgb.g);
+            if (isChannelValid(n, 0) && isChannelValid(n, 1)) {
+                rgSum += w * (n.rgb.r - n.rgb.g);
+                rgW += w;
+            }
+            if (isChannelValid(n, 2) && isChannelValid(n, 1)) {
+                bgSum += w * (n.rgb.b - n.rgb.g);
+                bgW += w;
+            }
+        }
+        if (rgW > 1e-6) rg = mix(rg0, rgSum / rgW, pc.chromaBlend);
+        if (bgW > 1e-6) bg = mix(bg0, bgSum / bgW, pc.chromaBlend);
+    }
+#endif
+    vec3 sensor = max(vec3(c.rgb.g + rg, c.rgb.g, c.rgb.g + bg), vec3(0.0));
+    float gwb = 0.5 * (pc.wb.y + pc.wb.z);
+    vec3 rgb = sensor * vec3(pc.wb.x, gwb, pc.wb.w);
+#if !RAWR_BENCH_BYPASS_HIGHLIGHT
+    uint highlightMode = pc.highlightReconstructionEnabled;
+    vec3 ceilings = vec3(pc.wb.x, gwb, pc.wb.w);
+    if (highlightMode == 0u) {
+        // Keep OFF uniform and cheap. In particular, never let the compiler
+        // predicate the expensive scene-dependent guide search into this path.
+        rgb = reconstructPostWbHighlight(rgb, ceilings, vec3(0.0), false, false);
+    } else if (highlightMode == 1u) {
+        vec3 clipped = clipStateRgb(centerClipState);
+        bool needsGuide = rawrHighlightMaximum(clipped) > 1e-6 &&
+                          rawrHighlightMaximum(rawrHighlightRepairWeights(rgb, ceilings)) > 1e-6;
+        if (needsGuide) {
+            vec4 guide = previewHighlightColorGuide(o, rgb, clipped, ceilings);
+            rgb = reconstructPostWbHighlight(rgb, ceilings, guide.rgb, guide.a > 0.5, true);
+        }
+    } else if (highlightMode == 2u) {
+        // Ordinary post-WB RGB for the synchronized image-wide guide passes.
+    }
+#endif
+    imageStore(outImage, o, vec4(rgb, 1.0));
+#endif
+}

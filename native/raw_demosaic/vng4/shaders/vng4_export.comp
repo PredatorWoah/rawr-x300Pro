@@ -1,0 +1,75 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#ifndef VNG4_WGX
+#define VNG4_WGX 16
+#endif
+#ifndef VNG4_WGY
+#define VNG4_WGY 16
+#endif
+#ifndef VNG4_CACHE_CFA
+#define VNG4_CACHE_CFA 1
+#endif
+layout(local_size_x = VNG4_WGX, local_size_y = VNG4_WGY, local_size_z = 1) in;
+#include "vng4_common.glsl"
+const int SW = VNG4_WGX + 2;
+const int SH = VNG4_WGY + 2;
+shared float sg[SW * SH];
+#if VNG4_CACHE_CFA
+shared float sc[SW * SH];
+#endif
+int si(int x, int y) { return y * SW + x; }
+float lg(int x, int y) { return sg[si(x, y)]; }
+float lc(int x, int y) {
+#if VNG4_CACHE_CFA
+    return sc[si(x, y)];
+#else
+    ivec2 origin = ivec2(gl_WorkGroupID.xy) * ivec2(VNG4_WGX, VNG4_WGY);
+    return cfa(origin + ivec2(x - 1, y - 1));
+#endif
+}
+void main() {
+    ivec2 origin = ivec2(gl_WorkGroupID.xy) * ivec2(VNG4_WGX, VNG4_WGY);
+    uint lane = gl_LocalInvocationIndex;
+    uint lanes = gl_WorkGroupSize.x * gl_WorkGroupSize.y;
+    for (uint i = lane; i < uint(SW * SH); i += lanes) {
+        int sx = int(i) % SW, sy = int(i) / SW;
+        ivec2 q = clampRaw(origin + ivec2(sx - 1, sy - 1));
+        sg[i] = greenAt(q);
+#if VNG4_CACHE_CFA
+        sc[i] = cfa(q);
+#endif
+    }
+    barrier();
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    vec3 rgb;
+    if (!inside(p, VNG4_BORDER))
+        rgb = librtprocessBayerBorderRgb(p);
+    else {
+        int lx = int(gl_LocalInvocationID.x) + 1, ly = int(gl_LocalInvocationID.y) + 1;
+        float g = lg(lx, ly);
+        int c = vngColorAt(p);
+        rgb = vec3(0);
+        rgb.g = g;
+        if ((c & 1) == 0) {
+            int own = (c == 0) ? 0 : 2, opp = (c == 0) ? 2 : 0;
+            rgb[own] = lc(lx, ly);
+            float rb = (lc(lx - 1, ly - 1) - lg(lx - 1, ly - 1) + lc(lx - 1, ly + 1) - lg(lx - 1, ly + 1) +
+                        lc(lx + 1, ly - 1) - lg(lx + 1, ly - 1) + lc(lx + 1, ly + 1) - lg(lx + 1, ly + 1));
+            rgb[opp] = g + 0.25 * rb;
+        } else {
+            float h = g + 0.5 * ((lc(lx - 1, ly) - lg(lx - 1, ly)) + (lc(lx + 1, ly) - lg(lx + 1, ly)));
+            float v = g + 0.5 * ((lc(lx, ly - 1) - lg(lx, ly - 1)) + (lc(lx, ly + 1) - lg(lx, ly + 1)));
+            int c0 = vngColorAt(ivec2(0, p.y)), c1 = vngColorAt(ivec2(1, p.y));
+            int rowColor = ((c0 & 1) == 0) ? c0 : c1;
+            if (rowColor == 0) {
+                rgb.r = h;
+                rgb.b = v;
+            } else {
+                rgb.b = h;
+                rgb.r = v;
+            }
+        }
+    }
+    imageStore(outputImage, p, vec4(rgb * pc.outputFactor, pc.outputAlpha));
+}

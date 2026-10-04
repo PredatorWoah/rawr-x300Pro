@@ -1,0 +1,83 @@
+#version 450
+// RawTherapee false-color correction: 3x3 I/Q average + original-Y RGB reconstruction.
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(binding = 0, rgba16f) uniform readonly image2D srcRgb;
+layout(binding = 1, rg32f) uniform readonly image2D iqMedian;
+layout(binding = 2, rgba16f) uniform writeonly image2D dstRgb;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    uint normalizedChroma;
+    float edgeSigma;
+    float chromaBound;
+}
+pc;
+
+float Yof(vec3 c) { return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b; }
+vec3 fromYIQ(float Y, vec2 iq) {
+    return vec3(Y + 0.956 * iq.x + 0.621 * iq.y, Y - 0.272 * iq.x - 0.647 * iq.y, Y - 1.105 * iq.x + 1.702 * iq.y);
+}
+// Bound chroma without discarding scene-linear highlight headroom. The old
+// fixed [0,1] bound forced s=0 whenever Y>1, turning every bright HDR pixel
+// gray before both the tonemap and the UltraHDR gainmap. SDR-range pixels keep
+// the existing [0,1] bound. HDR-range pixels retain their source headroom,
+// with a small margin for the median/average chroma filtering.
+float boundScale(float Y, vec2 iq, float sourceMaximum) {
+    float upper = max(Y, sourceMaximum) > 1.0 ? 1.25 * max(Y, sourceMaximum) : 1.0;
+    vec3 full = fromYIQ(Y, iq);
+    if (all(greaterThanEqual(full, vec3(0.0))) && all(lessThanEqual(full, vec3(upper)))) return 1.0;
+    float lo = 0.0, hi = 1.0;
+    for (int i = 0; i < 4; ++i) {
+        float mid = 0.5 * (lo + hi);
+        vec3 c = fromYIQ(Y, mid * iq);
+        if (all(greaterThanEqual(c, vec3(0.0))) && all(lessThanEqual(c, vec3(upper)))) lo = mid;
+        else hi = mid;
+    }
+    return lo;
+}
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (uint(p.x) >= pc.width || uint(p.y) >= pc.height) return;
+    int W = int(pc.width), H = int(pc.height);
+    vec4 s = imageLoad(srcRgb, p);
+
+    // Serial RawTherapee process leaves first and last rows untouched.
+    if (p.y == 0 || p.y == H - 1) {
+        imageStore(dstRgb, p, s);
+        return;
+    }
+
+    vec2 iq;
+    if (p.x == 0 || p.x == W - 1) {
+        // Interior-row edge columns are reconstructed from their unblurred chroma.
+        iq = imageLoad(iqMedian, p).rg;
+    } else if (pc.edgeSigma > 0.0) {
+        // Edge-aware average: bilateral weight on luminance distance so a
+        // dark notch beside bright lettering keeps its own chroma instead of
+        // borrowing the neighbor's. Falls back to uniform when the local
+        // patch is flat (weights ~1) or fully rejected (wSum guard).
+        float Yc = Yof(s.rgb);
+        float inv2s2 = 1.0 / max(pc.edgeSigma * pc.edgeSigma, 1e-8);
+        vec2 acc = vec2(0.0);
+        float wSum = 0.0;
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) {
+                ivec2 q = p + ivec2(dx, dy);
+                float Yn = Yof(imageLoad(srcRgb, q).rgb);
+                float d = Yn - Yc;
+                float w = exp(-d * d * inv2s2);
+                acc += w * imageLoad(iqMedian, q).rg;
+                wSum += w;
+            }
+        iq = acc / max(wSum, 1e-6);
+    } else {
+        iq = vec2(0.0);
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) iq += imageLoad(iqMedian, p + ivec2(dx, dy)).rg;
+        iq *= 1.0 / 9.0;
+    }
+    float Y = Yof(s.rgb);
+    if (pc.normalizedChroma != 0u) iq *= max(Y, 1e-4);
+    if (pc.chromaBound > 0.0) iq *= boundScale(Y, iq, max(s.r, max(s.g, s.b)));
+    imageStore(dstRgb, p, vec4(fromYIQ(Y, iq), s.a));
+}

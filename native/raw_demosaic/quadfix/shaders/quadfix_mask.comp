@@ -1,0 +1,34 @@
+#version 450
+// Passes 6/7: texture mask. t_raw = clamp((e - E_FLAT) / E_RANGE) then
+// separable Gaussian sigma 6 (radius 24, QF_MASK_W) per same-color plane.
+// H: energyImg -> maskTmpImg. V: maskTmpImg -> energyImg (t_smooth in place).
+layout(local_size_x = QUADFIX_LOCAL_X, local_size_y = QUADFIX_LOCAL_Y, local_size_z = 1) in;
+#include "quadfix_common.glsl"
+
+float trawAt(ivec2 p, int d) {
+#ifdef QUADFIX_PASS_V
+    return imageLoad(maskTmpImg, phaseClamp(p, 0, d)).r;
+#else
+    float e = imageLoad(energyImg, phaseClamp(p, d, 0)).r;
+    return clamp((e - QF_E_FLAT) * (1.0f / QF_E_RANGE), 0.0f, 1.0f);
+#endif
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    float acc = 0.0f;
+    for (int k = -QF_MASK_R; k <= QF_MASK_R; ++k) {
+#ifdef QUADFIX_PASS_V
+        acc += trawAt(p, k) * QF_MASK_W[k + QF_MASK_R];
+#else
+        acc += trawAt(p, k) * QF_MASK_W[k + QF_MASK_R];
+#endif
+    }
+    acc = clamp(acc, 0.0f, 1.0f);
+#ifdef QUADFIX_PASS_V
+    imageStore(energyImg, p, vec4(acc));
+#else
+    imageStore(maskTmpImg, p, vec4(acc));
+#endif
+}

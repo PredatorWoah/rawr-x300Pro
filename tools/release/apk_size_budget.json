@@ -1,0 +1,9 @@
+{
+  "release": {
+    "maxApkBytes": 25165824,
+    "maxDexBytes": 5242880
+  },
+  "debug": {
+    "maxApkBytes": 67108864
+  }
+}

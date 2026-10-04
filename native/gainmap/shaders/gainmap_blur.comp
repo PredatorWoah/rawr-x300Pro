@@ -1,0 +1,42 @@
+#version 450
+
+// Separable Gaussian blur over the encoded gain map: one direction per
+// dispatch (picked by push). Melts quantization contouring and residual
+// kinks the half-res grid preserves (recovery/tap C1 discontinuities
+// transmit straight through the ratio). Operates on stored (quantized)
+// values; edges clamped. Ships the B30 Photos verdict (sigma ~3 texels).
+//
+// Caller guarantees GENERAL layouts and STORAGE_BIT usage on both images.
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, rgba8) uniform readonly image2D srcImage;
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D dstImage;
+
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    uint horizontal;
+    float sigma;
+} pc;
+
+void main() {
+    uvec3 gid = gl_GlobalInvocationID;
+    if (gid.x >= pc.width || gid.y >= pc.height) return;
+    float sigma = max(pc.sigma, 1e-3);
+    int radius = int(min(ceil(3.0 * sigma), 8.0));
+    int w = int(pc.width) - 1;
+    int h = int(pc.height) - 1;
+    vec3 acc = vec3(0.0);
+    float wsum = 0.0;
+    for (int i = -radius; i <= radius; ++i) {
+        float tw = exp(-0.5 * float(i * i) / (sigma * sigma));
+        // Data-flow select, not control flow (Adreno-safe convention).
+        ivec2 px = ivec2(clamp(int(gid.x) + i, 0, w), int(gid.y));
+        ivec2 py = ivec2(int(gid.x), clamp(int(gid.y) + i, 0, h));
+        ivec2 p = (pc.horizontal != 0u) ? px : py;
+        acc += imageLoad(srcImage, p).rgb * tw;
+        wsum += tw;
+    }
+    imageStore(dstImage, ivec2(int(gid.x), int(gid.y)), vec4(acc / wsum, 1.0));
+}

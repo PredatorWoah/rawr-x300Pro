@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Deliberate compatible AGP/Kotlin/Gradle tuple; upgrades are reviewed together. -->
+    <issue id="AndroidGradlePluginVersion">
+        <ignore path="../gradle/wrapper/gradle-wrapper.properties" />
+    </issue>
+</lint>

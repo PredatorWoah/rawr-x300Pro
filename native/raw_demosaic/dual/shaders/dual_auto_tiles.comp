@@ -1,0 +1,75 @@
+#version 450
+// RawTherapee buildBlendMask() autoContrast tile scan, GPU form.
+// One invocation evaluates one tile. Statistics are written to the existing maskB scratch image.
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(binding = 2, r32f) uniform readonly image2D lum;
+layout(binding = 4, r32f) uniform writeonly image2D statsOut;
+layout(std430, binding = 5) buffer AutoState {
+    float resolvedThreshold;
+    float minVariance80;
+    float minVariance40;
+    float refinedVariance;
+    uint chosenPass;
+    uint tileX;
+    uint tileY;
+    uint tileSize;
+}
+state;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    float threshold;
+    float outputFactor;
+    float outputAlpha;
+    float b1;
+    float b2;
+    float b3;
+    float B;
+    float m00;
+    float m01;
+    float m02;
+    float m10;
+    float m11;
+    float m12;
+    float m20;
+    float m21;
+    float m22;
+    uint autoContrast;
+    uint autoPass;
+}
+pc;
+const float INF = 3.402823466e+38;
+float L(int x, int y) { return imageLoad(lum, ivec2(x, y)).r; }
+ivec2 statCoord(uint idx) { return ivec2(int(idx % pc.width), int(idx / pc.width)); }
+void main() {
+    uint pass = pc.autoPass;
+    if (pass == 1u && state.chosenPass == 0u) return;
+    uint tileSize = pass == 0u ? 80u : 40u;
+    uint skip = pass == 0u ? 80u : 10u;
+    uint numW = pass == 0u ? pc.width / 80u : pc.width / 10u - 3u;
+    uint numH = pass == 0u ? pc.height / 80u : pc.height / 10u - 3u;
+    uint idx = gl_GlobalInvocationID.x;
+    uint count = numW * numH;
+    if (idx >= count) return;
+    uint ix = idx % numW, iy = idx / numW;
+    uint x0 = ix * skip, y0 = iy * skip;
+    float sum = 0.0;
+    for (uint y = 0u; y < tileSize; ++y)
+        for (uint x = 0u; x < tileSize; ++x) sum += L(int(x0 + x), int(y0 + y));
+    float n = float(tileSize * tileSize);
+    float avg = sum / n;
+    float variance = INF;
+    if (avg >= 2000.0 && avg <= 20000.0) {
+        float acc = 0.0;
+        for (uint y = 0u; y < tileSize; ++y)
+            for (uint x = 0u; x < tileSize; ++x) {
+                float d = L(int(x0 + x), int(y0 + y)) - avg;
+                acc += d * d;
+            }
+        variance = acc / (n * avg);
+        if (variance < 0.5) variance = INF;
+    }
+    uint pass1Base = (pc.width / 80u) * (pc.height / 80u);
+    uint outIdx = (pass == 0u ? 0u : pass1Base) + idx;
+    imageStore(statsOut, statCoord(outIdx), vec4(variance, 0, 0, 0));
+}

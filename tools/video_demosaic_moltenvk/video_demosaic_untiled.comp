@@ -1,0 +1,101 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+// Single-frame video RAW stage. The 1080p branch fuses 5x5 MHC demosaic with
+// 2x2 area reduction; 4K/Open Gate use MHC at output resolution. No preview
+// image is sampled and no full-resolution RGB intermediate is allocated.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0, r16ui) uniform readonly uimage2D rawImage;
+layout(std430, set = 0, binding = 1) readonly buffer RawWords { uint words[]; } rawBuffer;
+layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D linearOut;
+layout(push_constant) uniform Params {
+    vec4 black;
+    vec4 invRange;
+    vec4 wb;
+    uint width;
+    uint height;
+    uint outWidth;
+    uint outHeight;
+    uint cropX;
+    uint cropY;
+    uint pattern;
+    uint stridePixels;
+    uint bufferEnabled;
+    uint reduceCfa;
+    uint lscEnabled;
+    uint lscWidth;
+    uint lscHeight;
+} pc;
+#define LSC_BINDING 3
+#include "lens_shading.glsl"
+
+int channelAt(ivec2 q) {
+    int phase = (q.x & 1) | ((q.y & 1) << 1);
+    if (pc.pattern == 0u) return int[4](0, 1, 2, 3)[phase]; // RGGB
+    if (pc.pattern == 1u) return int[4](1, 0, 3, 2)[phase]; // GRBG
+    if (pc.pattern == 2u) return int[4](2, 3, 0, 1)[phase]; // GBRG
+    return int[4](3, 2, 1, 0)[phase];                       // BGGR
+}
+
+float rawAt(ivec2 q) {
+    q = clamp(q, ivec2(0), ivec2(pc.width, pc.height) - 1);
+    int c = channelAt(q);
+    uint v;
+    if (pc.bufferEnabled != 0u) {
+        uint address = uint(q.y) * pc.stridePixels + uint(q.x);
+        uint word = rawBuffer.words[address >> 1u];
+        v = (address & 1u) == 0u ? (word & 65535u) : (word >> 16u);
+    } else {
+        v = imageLoad(rawImage, q).r;
+    }
+    float value = clamp((float(v) - pc.black[c]) * pc.invRange[c], 0.0, 1.0);
+    return value * lensShadingGain(q, c == 1 || c == 2 ? 1 : c);
+}
+
+vec3 fullRgb(ivec2 p);
+
+vec3 reducedRgb(ivec2 cell) {
+    // Fuse full-resolution MHC demosaic and 2x2 area reduction. This avoids
+    // a full-resolution RGB image and gives each 1080p pixel a true area
+    // estimate across all four CFA sites, reducing stair steps at edges.
+    ivec2 p = cell * 2;
+    return 0.25 * (fullRgb(p) + fullRgb(p + ivec2(1, 0)) +
+                   fullRgb(p + ivec2(0, 1)) + fullRgb(p + ivec2(1, 1)));
+}
+
+vec3 fullRgb(ivec2 p) {
+    // MHC's three 5x5 kernels, factored by CFA site. This gathers at most
+    // thirteen RAW taps instead of recursively estimating every neighbor's
+    // green value. Coefficients are scaled by eight in the original method.
+    int c = channelAt(p);
+    float center = rawAt(p);
+    float h1 = rawAt(p + ivec2(-1, 0)) + rawAt(p + ivec2(1, 0));
+    float v1 = rawAt(p + ivec2(0, -1)) + rawAt(p + ivec2(0, 1));
+    float h2 = rawAt(p + ivec2(-2, 0)) + rawAt(p + ivec2(2, 0));
+    float v2 = rawAt(p + ivec2(0, -2)) + rawAt(p + ivec2(0, 2));
+    if (c == 0 || c == 3) {
+        float g = (4.0 * center + 2.0 * (h1 + v1) - (h2 + v2)) * 0.125;
+        float diagonals = rawAt(p + ivec2(-1, -1)) + rawAt(p + ivec2(1, -1)) +
+                          rawAt(p + ivec2(-1, 1)) + rawAt(p + ivec2(1, 1));
+        float opposite = (6.0 * center + 2.0 * diagonals - 1.5 * (h2 + v2)) * 0.125;
+        return max(c == 0 ? vec3(center, g, opposite) : vec3(opposite, g, center), vec3(0.0));
+    } else {
+        float diagonals = rawAt(p + ivec2(-1, -1)) + rawAt(p + ivec2(1, -1)) +
+                          rawAt(p + ivec2(-1, 1)) + rawAt(p + ivec2(1, 1));
+        float horizontal = (5.0 * center + 4.0 * h1 - diagonals - h2 + 0.5 * v2) * 0.125;
+        float vertical = (5.0 * center + 4.0 * v1 - diagonals - v2 + 0.5 * h2) * 0.125;
+        bool redHorizontal = channelAt(p + ivec2(1, 0)) == 0;
+        return max(redHorizontal ? vec3(horizontal, center, vertical)
+                                 : vec3(vertical, center, horizontal), vec3(0.0));
+    }
+}
+
+void main() {
+    ivec2 outPixel = ivec2(gl_GlobalInvocationID.xy);
+    if (outPixel.x >= int(pc.outWidth) || outPixel.y >= int(pc.outHeight)) return;
+    ivec2 crop = ivec2(pc.cropX, pc.cropY);
+    vec3 sensor = pc.reduceCfa != 0u ? reducedRgb((crop / 2) + outPixel)
+                                     : fullRgb(crop + outPixel);
+    float greenWb = 0.5 * (pc.wb.y + pc.wb.z);
+    imageStore(linearOut, outPixel, vec4(sensor * vec3(pc.wb.x, greenWb, pc.wb.w), 1.0));
+}

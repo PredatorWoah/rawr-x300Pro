@@ -1,0 +1,59 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0, r16ui) uniform readonly uimage2D rawImage;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D packedImage;
+layout(set = 0, binding = 2, r16ui) uniform writeonly uimage2D clipStateImage;
+layout(push_constant) uniform PC {
+    vec4 black;
+    vec4 invRange;
+    vec4 wb;
+    float clipThreshold;
+    uint width;
+    uint height;
+    uint pattern;
+    uint lscEnabled;
+    uint lscWidth;
+    uint lscHeight;
+}
+pc;
+#define LSC_BINDING 3
+#include "lens_shading.glsl"
+#include "cfa_common.glsl"
+
+float normalized(float rawSample, int physicalChannel) {
+    return clamp((rawSample - pc.black[physicalChannel]) * pc.invRange[physicalChannel], 0.0, 1.0);
+}
+
+
+void loadPhysicalCell(ivec2 cell, out float r, out float g1, out float g2, out float b, out uint clipState) {
+    ivec2 cells = ivec2(int(pc.width >> 1), int(pc.height >> 1));
+    cell = clamp(cell, ivec2(0), cells - ivec2(1));
+    ivec2 qr, qg1, qg2, qb;
+    rawrCfaCellCoordinates(pc.pattern, cell, qr, qg1, qg2, qb);
+    r = normalized(float(imageLoad(rawImage, qr).r), 0);
+    g1 = normalized(float(imageLoad(rawImage, qg1).r), 1);
+    g2 = normalized(float(imageLoad(rawImage, qg2).r), 2);
+    b = normalized(float(imageLoad(rawImage, qb).r), 3);
+
+    // Classification is the only highlight operation before demosaic. Keep it
+    // in normalized sensor space so LSC and WB can never create false clipping.
+    clipState = (r >= pc.clipThreshold ? 1u : 0u) | (g1 >= pc.clipThreshold ? 2u : 0u) |
+                (g2 >= pc.clipThreshold ? 4u : 0u) | (b >= pc.clipThreshold ? 8u : 0u);
+    r *= lensShadingGain(qr, 0);
+    g1 *= lensShadingGain(qg1, 1);
+    g2 *= lensShadingGain(qg2, 1);
+    b *= lensShadingGain(qb, 3);
+}
+
+void main() {
+    ivec2 o = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 os = ivec2(int(pc.width >> 1), int(pc.height >> 1));
+    if (any(greaterThanEqual(o, os))) return;
+
+    float r, g1, g2, b;
+    uint clipState;
+    loadPhysicalCell(o, r, g1, g2, b, clipState);
+    imageStore(packedImage, o, vec4(r, g1, g2, b));
+    imageStore(clipStateImage, o, uvec4(clipState, 0u, 0u, 0u));
+}

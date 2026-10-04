@@ -1,0 +1,23 @@
+#version 450
+// Pass 1: 9x9 exact median guide per same-color plane (buffer -> guideImg).
+layout(local_size_x = QUADFIX_LOCAL_X, local_size_y = QUADFIX_LOCAL_Y, local_size_z = 1) in;
+#include "quadfix_common.glsl"
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    float v[81];
+    int n = 0;
+    for (int dy = -4; dy <= 4; ++dy)
+        for (int dx = -4; dx <= 4; ++dx) v[n++] = bayerPhaseAt(p, dx, dy);
+    // Partial selection sort: a[40] is the median of 81.
+    for (int i = 0; i <= 40; ++i) {
+        int m = i;
+        for (int j = i + 1; j < 81; ++j)
+            if (v[j] < v[m]) m = j;
+        float t = v[i];
+        v[i] = v[m];
+        v[m] = t;
+    }
+    imageStore(guideImg, p, vec4(v[40]));
+}

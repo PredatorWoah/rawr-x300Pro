@@ -1,0 +1,44 @@
+cmake_minimum_required(VERSION 3.22)
+project(rcd_demosaic VERSION 0.8.9 LANGUAGES CXX)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(ANDROID)
+  set(VULKAN_LIB vulkan)
+else()
+  find_package(Vulkan REQUIRED)
+  set(VULKAN_LIB Vulkan::Vulkan)
+endif()
+
+add_library(rcd STATIC src/Pipeline.cpp)
+add_library(rcd::rcd ALIAS rcd)
+target_include_directories(rcd PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_compile_features(rcd PUBLIC cxx_std_17)
+target_compile_options(rcd PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-O3>)
+target_link_libraries(rcd PUBLIC ${VULKAN_LIB})
+
+option(RCD_ENABLE_WARNINGS "Enable strict compiler warnings" ON)
+option(RCD_BUILD_TESTS "Build standalone Vulkan validation harness" OFF)
+if(RCD_ENABLE_WARNINGS)
+  target_compile_options(rcd PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-Wpedantic;-Werror>)
+endif()
+
+install(TARGETS rcd EXPORT rcdTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY shaders/ DESTINATION ${CMAKE_INSTALL_DATADIR}/rcd/shaders FILES_MATCHING PATTERN "*.comp" PATTERN "*.glsl")
+install(EXPORT rcdTargets NAMESPACE rcd:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rcd)
+
+if(RCD_BUILD_TESTS)
+  add_executable(rcd_validate validation/rcd_validate.cpp)
+  target_link_libraries(rcd_validate PRIVATE rcd ${VULKAN_LIB})
+  target_compile_options(rcd_validate PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-Wpedantic;-Werror>)
+  add_executable(rcd_benchmark validation/rcd_benchmark.cpp)
+  target_link_libraries(rcd_benchmark PRIVATE rcd ${VULKAN_LIB})
+  target_compile_options(rcd_benchmark PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-Wpedantic;-Werror>)
+endif()

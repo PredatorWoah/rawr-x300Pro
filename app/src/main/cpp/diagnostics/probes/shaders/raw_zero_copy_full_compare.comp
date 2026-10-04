@@ -1,0 +1,38 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, r16ui) uniform readonly uimage2D rawImage;
+layout(set = 0, binding = 3, r16ui) uniform readonly uimage2D referenceRawImage;
+layout(std430, set = 0, binding = 4) buffer ProbeOutput { uint words[]; }
+probe;
+
+layout(push_constant) uniform ProbePush {
+    uint rawWidth;
+    uint rawHeight;
+    uint outputWidth;
+    uint outputHeight;
+}
+pc;
+
+// Must match RawIntegrityProbe.cpp.
+const uint DENSE = 64u;
+const uint DENSE_WORDS = DENSE * DENSE * 9u;
+const uint BOTTOM_W = 32u;
+const uint BOTTOM_H = 32u;
+const uint STATS_BASE = DENSE_WORDS + BOTTOM_W * BOTTOM_H * 3u;
+
+void main() {
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+    if (x >= pc.rawWidth || y >= pc.rawHeight) return;
+
+    uint direct = imageLoad(rawImage, ivec2(int(x), int(y))).r;
+    uint copied = imageLoad(referenceRawImage, ivec2(int(x), int(y))).r;
+    if (direct == copied) return;
+
+    uint delta = direct > copied ? direct - copied : copied - direct;
+    atomicAdd(probe.words[STATS_BASE + 0u], 1u);  // total mismatch count
+    atomicMax(probe.words[STATS_BASE + 1u], delta);
+    atomicAdd(probe.words[STATS_BASE + 2u + ((y & 1u) << 1u) + (x & 1u)], 1u);
+    atomicMin(probe.words[STATS_BASE + 6u], y * pc.rawWidth + x);  // first mismatch linear index
+}

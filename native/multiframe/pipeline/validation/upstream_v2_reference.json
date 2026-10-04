@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/Jamy-L/Handheld-Multi-Frame-Super-Resolution",
+  "revision": "39ce4aa",
+  "release": "1.4",
+  "transform": "clip_raw_then_sqrt_bayer_quad_rgb_v1",
+  "local_corrections": [
+    "Apply optional alignment preprocessing symmetrically to reference and moving frames when producing oracle data.",
+    "For 8x8 ICA, clip the solved flow update rather than partial reduction terms."
+  ],
+  "checkpoint_format": "little-endian float32",
+  "notes": "V2 golden data must record the complete upstream revision and LUT metadata beside every replay fixture."
+}

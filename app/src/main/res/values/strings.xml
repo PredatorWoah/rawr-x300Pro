@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Rawr</string>
+    <string name="settings_title">Settings</string>
+    <string name="notif_photo_processing_name">Photo processing</string>
+    <string name="notif_photo_processing_desc">Finishing your queued captures</string>
+    <string name="notif_background_saves_name">Background saves</string>
+    <string name="notif_background_saves_desc">Shows progress and completion of Rawr background artifact saves</string>
+    <string name="renderer_title">Renderer</string>
+    <string name="renderer_shortcut_short">Renderer</string>
+    <string name="renderer_shortcut_long">Open Renderer</string>
+</resources>

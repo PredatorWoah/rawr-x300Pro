@@ -1,0 +1,17 @@
+{
+  "upstream_revision": "39ce4aa",
+  "stages": [
+    {
+      "name": "fine_flow",
+      "file": "fine_flow.f32",
+      "absolute_tolerance": 0.001,
+      "rmse_tolerance": 0.0001
+    },
+    {
+      "name": "linear_output",
+      "file": "linear_output.f32",
+      "absolute_tolerance": 0.002,
+      "rmse_tolerance": 0.0002
+    }
+  ]
+}

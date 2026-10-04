@@ -1,0 +1,6 @@
+# AGP publishes this stable path after configuring the debug native build.
+# Use Android flags for app/library code; host tools/tests retain their own discovery.
+If:
+  PathMatch: (app/src/main/cpp|native)/.*
+CompileFlags:
+  CompilationDatabase: app/.cxx/tools/debug/arm64-v8a

@@ -1,0 +1,30 @@
+#version 450
+// Legacy tagged replay decoder. It intentionally performs no highlight
+// reconstruction: replay now exercises the same single post-WB stage as every
+// rendered still. The push-constant ABI is retained for existing diagnostic files.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0, rgba16f) uniform readonly image2D taggedInput;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D packedOutput;
+layout(set = 0, binding = 2, r16ui) uniform writeonly uimage2D clipStateOutput;
+layout(push_constant) uniform PC {
+    vec4 wb;
+    uint width;
+    uint height;
+    uint variant;
+    float anchorTolerance;
+    float madLimit;
+    float consensusLimit;
+    uint minSupport;
+}
+pc;
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = ivec2(int(pc.width >> 1), int(pc.height >> 1));
+    if (any(greaterThanEqual(p, extent))) return;
+    vec4 tagged = imageLoad(taggedInput, p);
+    uint state = (tagged.r < 0.0 ? 1u : 0u) | (tagged.g < 0.0 ? 2u : 0u) | (tagged.b < 0.0 ? 4u : 0u) |
+                 (tagged.a < 0.0 ? 8u : 0u);
+    imageStore(packedOutput, p, abs(tagged));
+    imageStore(clipStateOutput, p, uvec4(state, 0u, 0u, 0u));
+}

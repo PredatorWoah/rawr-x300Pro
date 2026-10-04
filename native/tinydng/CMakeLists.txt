@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+project(rawr_tinydng LANGUAGES C)
+add_library(rawr_tinydng STATIC tinydng_api.c tinydng_io.c tinydng_tiff.c tinydng_dng.c tinydng_codec.c tiny_dng_ljpeg92_v2.c tinydng_write.c)
+target_include_directories(rawr_tinydng PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(rawr_tinydng PUBLIC c_std_11)
+target_compile_definitions(rawr_tinydng PRIVATE TINYDNG_NO_PSD TINYDNG_NO_ZIP TINYDNG_NO_BASELINE_JPEG)
+set_target_properties(rawr_tinydng PROPERTIES POSITION_INDEPENDENT_CODE ON COMPILE_WARNING_AS_ERROR OFF)
+target_compile_options(rawr_tinydng PRIVATE -w)

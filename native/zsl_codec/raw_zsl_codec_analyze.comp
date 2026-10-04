@@ -1,0 +1,56 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(set = 0, binding = 0, r16ui) uniform readonly uimage2D srcRaw;
+layout(set = 0, binding = 1, std430) writeonly buffer MetaBuf { uint meta[]; }
+META;
+layout(set = 0, binding = 2, std430) writeonly buffer SizeBuf { uint sizes[]; }
+SIZES;
+layout(push_constant) uniform PC { uint width, height, tilesX, tilesY, slotWords; }
+pc;
+shared uint smin[4][64];
+shared uint smax[4][64];
+uint bits_exact(uint x) {
+    uint b = 0u;
+    while (x != 0u) {
+        ++b;
+        x >>= 1u;
+    }
+    return b;
+}
+void main() {
+    uint tile = gl_WorkGroupID.x;
+    if (tile >= pc.tilesX * pc.tilesY) return;
+    uint lid = gl_LocalInvocationID.x, tx = tile % pc.tilesX, ty = tile / pc.tilesX, x0 = tx * 32u, y0 = ty * 32u;
+    for (uint p = 0u; p < 4u; ++p) {
+        uint px = p & 1u, py = p >> 1u, mn = 65535u, mx = 0u;
+        for (uint i = lid; i < 256u; i += 64u) {
+            uint sx = i & 15u, sy = i >> 4u, x = x0 + sx * 2u + px, y = y0 + sy * 2u + py;
+            if (x < pc.width && y < pc.height) {
+                uint v = imageLoad(srcRaw, ivec2(x, y)).r;
+                mn = min(mn, v);
+                mx = max(mx, v);
+            }
+        }
+        smin[p][lid] = mn;
+        smax[p][lid] = mx;
+    }
+    barrier();
+    for (uint stride = 32u; stride > 0u; stride >>= 1u) {
+        if (lid < stride) {
+            for (uint p = 0u; p < 4u; ++p) {
+                smin[p][lid] = min(smin[p][lid], smin[p][lid + stride]);
+                smax[p][lid] = max(smax[p][lid], smax[p][lid + stride]);
+            }
+        }
+        barrier();
+    }
+    if (lid < 4u) {
+        uint p = lid, mn = smin[p][0], mx = smax[p][0], bits = bits_exact(mx - mn), stream = tile * 4u + p;
+        uint px = p & 1u, py = p >> 1u;
+        uint validW = (x0 + px < pc.width) ? ((min(x0 + 32u, pc.width) - x0 - px + 1u) >> 1u) : 0u;
+        uint validH = (y0 + py < pc.height) ? ((min(y0 + 32u, pc.height) - y0 - py + 1u) >> 1u) : 0u;
+        uint count = validW * validH;
+        META.meta[stream] = (mn & 0xffffu) | ((bits & 31u) << 16u);
+        SIZES.sizes[stream] = (count * bits + 31u) >> 5u;
+    }
+}

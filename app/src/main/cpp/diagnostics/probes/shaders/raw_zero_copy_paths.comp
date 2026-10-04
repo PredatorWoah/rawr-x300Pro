@@ -1,0 +1,118 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, r16ui) uniform readonly uimage2D rawImage;
+layout(set = 0, binding = 1, rgba16f) uniform readonly image2D productionLinear;
+layout(set = 0, binding = 3, r16ui) uniform readonly uimage2D referenceRawImage;
+layout(set = 0, binding = 5) uniform usampler2D sampledRaw;
+layout(set = 0, binding = 6, r16ui) uniform readonly uimage2D linearImportedRaw;
+layout(set = 0, binding = 7, r16ui) uniform readonly uimage2D drmImportedRaw;
+layout(set = 0, binding = 8) uniform usampler2D drmSampledRaw;
+layout(std430, set = 0, binding = 9) readonly buffer RawCopyBuffer { uint packedWords[]; }
+copyRaw;
+layout(set = 0, binding = 10, rgba16f) uniform readonly image2D bufferPreviewLinear;
+layout(std430, set = 0, binding = 4) buffer ProbeOutput { uint words[]; }
+probe;
+
+layout(push_constant) uniform ProbePush {
+    uint rawWidth;
+    uint rawHeight;
+    uint outputWidth;
+    uint outputHeight;
+    uint linearCandidateAvailable;
+    uint drmStorageAvailable;
+    uint drmSampledAvailable;
+    uint copyBufferAvailable;
+    uint bufferPreviewAvailable;
+}
+pc;
+
+const uint DENSE = 64u;
+const uint DENSE_WORDS = DENSE * DENSE * 9u;
+const uint BOTTOM_W = 32u;
+const uint BOTTOM_H = 32u;
+const uint FULL_STATS_BASE = DENSE_WORDS + BOTTOM_W * BOTTOM_H * 3u;
+const uint CAND_BASE = FULL_STATS_BASE + 8u;
+
+void accumulate(uint base, uint actual, uint expected, uint x, uint y) {
+    if (actual == expected) return;
+    uint delta = actual > expected ? actual - expected : expected - actual;
+    atomicAdd(probe.words[base + 0u], 1u);
+    atomicMax(probe.words[base + 1u], delta);
+    atomicAdd(probe.words[base + 2u + ((y & 1u) << 1u) + (x & 1u)], 1u);
+    atomicMin(probe.words[base + 6u], y * pc.rawWidth + x);
+}
+
+bool referenceAtLinear(uint linear, out uint value) {
+    uint total = pc.rawWidth * pc.rawHeight;
+    if (linear >= total) return false;
+    uint ry = linear / pc.rawWidth;
+    uint rx = linear - ry * pc.rawWidth;
+    value = imageLoad(referenceRawImage, ivec2(int(rx), int(ry))).r;
+    return true;
+}
+
+void main() {
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+    if (x >= pc.rawWidth || y >= pc.rawHeight) return;
+
+    uint copied = imageLoad(referenceRawImage, ivec2(int(x), int(y))).r;
+
+    // Candidate A: integer sampled-image path. texelFetch avoids filtering and
+    // normalized coordinates, so a PASS is bit-exact RAW16 zero-copy evidence.
+    uint sampled = texelFetch(sampledRaw, ivec2(int(x), int(y)), 0).r;
+    accumulate(CAND_BASE + 0u, sampled, copied, x, y);
+
+    // Characterize the broken storage-image path. If imageLoad() is effectively
+    // addressing rows at one of these candidate pitches, its value at (x,y)
+    // should equal the transfer oracle at the corresponding linear source index.
+    uint direct = imageLoad(rawImage, ivec2(int(x), int(y))).r;
+    const uint pitches[3] = uint[3](4096u, 4064u, 4080u);
+    for (uint i = 0u; i < 3u; ++i) {
+        uint mapped;
+        uint linear = y * pitches[i] + x;
+        if (referenceAtLinear(linear, mapped)) {
+            accumulate(CAND_BASE + 8u + i * 8u, direct, mapped, x, y);
+            atomicAdd(probe.words[CAND_BASE + 8u + i * 8u + 7u], 1u);
+        }
+    }
+
+    if (pc.linearCandidateAvailable != 0u) {
+        uint linearImported = imageLoad(linearImportedRaw, ivec2(int(x), int(y))).r;
+        accumulate(CAND_BASE + 32u, linearImported, copied, x, y);
+    }
+
+    if (pc.drmStorageAvailable != 0u) {
+        uint drmStorage = imageLoad(drmImportedRaw, ivec2(int(x), int(y))).r;
+        accumulate(CAND_BASE + 40u, drmStorage, copied, x, y);
+    }
+    if (pc.drmSampledAvailable != 0u) {
+        uint drmSampled = texelFetch(drmSampledRaw, ivec2(int(x), int(y)), 0).r;
+        accumulate(CAND_BASE + 48u, drmSampled, copied, x, y);
+    }
+    if (pc.copyBufferAvailable != 0u) {
+        uint linear = y * pc.rawWidth + x;
+        uint packed = copyRaw.packedWords[linear >> 1u];
+        uint fromBuffer = ((linear & 1u) == 0u) ? (packed & 0xffffu) : (packed >> 16u);
+        accumulate(CAND_BASE + 56u, fromBuffer, copied, x, y);
+    }
+
+    if (pc.bufferPreviewAvailable != 0u && x < pc.outputWidth && y < pc.outputHeight) {
+        vec4 a = imageLoad(bufferPreviewLinear, ivec2(int(x), int(y)));
+        vec4 b = imageLoad(productionLinear, ivec2(int(x), int(y)));
+        bool same = all(equal(floatBitsToUint(a), floatBitsToUint(b)));
+        if (!same) {
+            uint base = CAND_BASE + 64u;
+            atomicAdd(probe.words[base + 0u], 1u);
+            float maxDelta = max(max(abs(a.r - b.r), abs(a.g - b.g)), max(abs(a.b - b.b), abs(a.a - b.a)));
+            atomicMax(probe.words[base + 1u], floatBitsToUint(maxDelta));
+            atomicAdd(probe.words[base + 2u + ((y & 1u) << 1u) + (x & 1u)], 1u);
+            atomicMin(probe.words[base + 6u], y * pc.outputWidth + x);
+        }
+    }
+}
+
+// LINEAR_IMAGE_IMPORT uses a second legal Vulkan import of the same camera AHB.
+// If supported, imageLoad must provide exact logical RAW16 coordinates without
+// copying the payload into app-owned memory.

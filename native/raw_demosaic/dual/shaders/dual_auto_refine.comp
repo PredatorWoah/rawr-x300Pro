@@ -1,0 +1,68 @@
+#version 450
+// RawTherapee second-pass +-skip refinement around the best coarse 40x40 tile.
+// Candidate variances are stored after the coarse tile-stat area in maskB scratch.
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(binding = 2, r32f) uniform readonly image2D lum;
+layout(binding = 4, r32f) uniform writeonly image2D statsOut;
+layout(std430, binding = 5) buffer AutoState {
+    float resolvedThreshold;
+    float minVariance80;
+    float minVariance40;
+    float refinedVariance;
+    uint chosenPass;
+    uint tileX;
+    uint tileY;
+    uint tileSize;
+}
+state;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    float threshold;
+    float outputFactor;
+    float outputAlpha;
+    float b1;
+    float b2;
+    float b3;
+    float B;
+    float m00;
+    float m01;
+    float m02;
+    float m10;
+    float m11;
+    float m12;
+    float m20;
+    float m21;
+    float m22;
+    uint autoContrast;
+    uint autoPass;
+}
+pc;
+const float INF = 3.402823466e+38;
+float L(int x, int y) { return imageLoad(lum, ivec2(x, y)).r; }
+ivec2 statCoord(uint idx) { return ivec2(int(idx % pc.width), int(idx / pc.width)); }
+void main() {
+    if (state.chosenPass == 0u) return;
+    int startX = max(int(state.tileX) - 10, 0), startY = max(int(state.tileY) - 10, 0);
+    int endX = min(int(state.tileX) + 10, int(pc.width) - 40), endY = min(int(state.tileY) + 10, int(pc.height) - 40);
+    uint nw = uint(endX - startX + 1), nh = uint(endY - startY + 1), idx = gl_GlobalInvocationID.x;
+    if (idx >= nw * nh) return;
+    int x0 = startX + int(idx % nw), y0 = startY + int(idx / nw);
+    float sum = 0.0;
+    for (int y = 0; y < 40; ++y)
+        for (int x = 0; x < 40; ++x) sum += L(x0 + x, y0 + y);
+    float avg = sum / 1600.0, variance = INF;
+    if (avg >= 2000.0 && avg <= 20000.0) {
+        float acc = 0.0;
+        for (int y = 0; y < 40; ++y)
+            for (int x = 0; x < 40; ++x) {
+                float d = L(x0 + x, y0 + y) - avg;
+                acc += d * d;
+            }
+        variance = acc / (1600.0 * avg);
+        if (variance < 0.5) variance = INF;
+    }
+    uint pass1Base = (pc.width / 80u) * (pc.height / 80u);
+    uint refineBase = pass1Base + (pc.width / 10u - 3u) * (pc.height / 10u - 3u);
+    imageStore(statsOut, statCoord(refineBase + idx), vec4(variance, 0, 0, 0));
+}

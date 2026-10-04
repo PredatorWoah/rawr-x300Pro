@@ -1,0 +1,6 @@
+add_library(zsl_ring STATIC src/ZslRing.cpp src/RawImageRing.cpp)
+add_library(rawr::zsl_ring ALIAS zsl_ring)
+target_include_directories(zsl_ring PUBLIC include)
+target_compile_features(zsl_ring PUBLIC cxx_std_17)
+target_compile_options(zsl_ring PRIVATE -Wall -Wextra -Wpedantic -Werror)
+target_link_libraries(zsl_ring PUBLIC ${VULKAN_LIB})

@@ -1,0 +1,26 @@
+{
+  "source": "RAWR_20260827_00101910.dng",
+  "sha256": "b782e034d55b5ec309fe41e0abc8a576bc48a76a27cb0f0d4845020fe6c1c9bf",
+  "source_shape": [
+    4080,
+    3064
+  ],
+  "crop_xywh": [
+    1992,
+    1484,
+    96,
+    96
+  ],
+  "pattern": "RGGB",
+  "black_level": [
+    1024.0,
+    1024.0,
+    1024.0,
+    1024.0
+  ],
+  "white_level": 8712.0,
+  "normalized_min": 0.013267429545521736,
+  "normalized_max": 0.4006243348121643,
+  "rgb_min": 0.013267429545521736,
+  "rgb_max": 0.40424272418022156
+}

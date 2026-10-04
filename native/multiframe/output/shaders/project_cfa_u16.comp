@@ -1,0 +1,36 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(set = 0, binding = 0, rgba16f) readonly uniform image2D mergedRgb;
+layout(set = 0, binding = 1, r16ui) writeonly uniform uimage2D projectedCfa;
+
+layout(push_constant) uniform Parameters {
+    vec4 blackByPhase;
+    float whiteLevel;
+    uint width;
+    uint height;
+    uint cfa;
+}
+p;
+
+uint channelForSite(ivec2 q) {
+    uint phase = uint((q.y & 1) * 2 + (q.x & 1));
+    // Channel indices: R=0, G=1, B=2. CFA IDs match RawMergeWronskiGpu.
+    const uvec4 rggb = uvec4(0, 1, 1, 2);
+    const uvec4 grbg = uvec4(1, 0, 2, 1);
+    const uvec4 gbrg = uvec4(1, 2, 0, 1);
+    const uvec4 bggr = uvec4(2, 1, 1, 0);
+    return p.cfa == 0u ? rggb[phase] : p.cfa == 1u ? grbg[phase] : p.cfa == 2u ? gbrg[phase] : bggr[phase];
+}
+
+void main() {
+    ivec2 q = ivec2(gl_GlobalInvocationID.xy);
+    if (q.x >= int(p.width) || q.y >= int(p.height)) return;
+    uint phase = uint((q.y & 1) * 2 + (q.x & 1));
+    vec3 rgb = imageLoad(mergedRgb, q).rgb;
+    float normalized = max(0.0, rgb[channelForSite(q)]);
+    float range = max(1.0, p.whiteLevel - p.blackByPhase[phase]);
+    precise float code = fma(normalized, range, p.blackByPhase[phase]);
+    uint packed = uint(roundEven(clamp(code, 0.0, 65535.0)));
+    imageStore(projectedCfa, q, uvec4(packed, 0u, 0u, 0u));
+}

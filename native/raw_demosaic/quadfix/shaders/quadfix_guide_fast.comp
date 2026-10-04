@@ -1,0 +1,31 @@
+#version 450
+// Pass 1 (fast variant): separable row-then-column 9-tap median per
+// same-color plane. Python A/B (spatial_kernel_check.py section B):
+// end-to-end sky delta vs exact median rms 0.018 DN / max 0.20 DN.
+layout(local_size_x = QUADFIX_LOCAL_X, local_size_y = QUADFIX_LOCAL_Y, local_size_z = 1) in;
+#include "quadfix_common.glsl"
+
+float med9(float a0, float a1, float a2, float a3, float a4, float a5, float a6, float a7, float a8) {
+    float v[9];
+    v[0] = a0; v[1] = a1; v[2] = a2; v[3] = a3; v[4] = a4; v[5] = a5; v[6] = a6; v[7] = a7; v[8] = a8;
+    for (int i = 0; i < 9; ++i)
+        for (int j = i + 1; j < 9; ++j)
+            if (v[j] < v[i]) {
+                float t = v[i];
+                v[i] = v[j];
+                v[j] = t;
+            }
+    return v[4];
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    float rows[9];
+    for (int dy = -4; dy <= 4; ++dy) {
+        rows[dy + 4] = med9(bayerPhaseAt(p, -4, dy), bayerPhaseAt(p, -3, dy), bayerPhaseAt(p, -2, dy),
+                             bayerPhaseAt(p, -1, dy), bayerPhaseAt(p, 0, dy), bayerPhaseAt(p, 1, dy),
+                             bayerPhaseAt(p, 2, dy), bayerPhaseAt(p, 3, dy), bayerPhaseAt(p, 4, dy));
+    }
+    imageStore(guideImg, p, vec4(med9(rows[0], rows[1], rows[2], rows[3], rows[4], rows[5], rows[6], rows[7], rows[8])));
+}

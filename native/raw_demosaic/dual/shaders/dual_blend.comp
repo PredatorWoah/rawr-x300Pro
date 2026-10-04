@@ -1,0 +1,35 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(binding = 0, rgba16f) uniform image2D rcdRgb;
+layout(binding = 1, rgba16f) uniform readonly image2D vngRgb;
+layout(binding = 3, r32f) uniform readonly image2D maskIn;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    float threshold;
+    float outputFactor;
+    float outputAlpha;
+    float b1;
+    float b2;
+    float b3;
+    float B;
+    float m00;
+    float m01;
+    float m02;
+    float m10;
+    float m11;
+    float m12;
+    float m20;
+    float m21;
+    float m22;
+}
+pc;
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    vec3 r = imageLoad(rcdRgb, p).rgb;
+    float a = imageLoad(maskIn, p).r;
+    vec3 v = imageLoad(vngRgb, p).rgb;
+    vec3 rgb = (a * (r - v) + v) * pc.outputFactor;
+    imageStore(rcdRgb, p, vec4(rgb, pc.outputAlpha));
+}

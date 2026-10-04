@@ -1,0 +1,16 @@
+#version 450
+#ifndef LOCAL_X
+#define LOCAL_X 8
+#endif
+#ifndef LOCAL_Y
+#define LOCAL_Y 16
+#endif
+layout(local_size_x = LOCAL_X, local_size_y = LOCAL_Y) in;
+layout(binding = 0, rgba16f) uniform readonly image2D inputImage;
+layout(binding = 1, rgba8) uniform writeonly image2D outputImage;
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 n = imageSize(inputImage);
+    if (any(greaterThanEqual(p, n))) return;
+    imageStore(outputImage, p, clamp(imageLoad(inputImage, p), 0.0, 1.0));
+}

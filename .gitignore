@@ -1,0 +1,107 @@
+# Gradle
+.gradle/
+/build/
+/app/build/
+/native/tonemap_engine/build/
+/native/spektrafilm/build*/
+out/
+/CMakeFiles/
+
+# Kotlin / Java
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android
+local.properties
+*.ap_
+*.aab
+*.apk
+*.dex
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.kotlin/
+.claude/
+.zed/
+*.DS_Store
+
+# Local caches
+.cache/
+
+# Python / numba caches
+__pycache__/
+*.pyc
+*.pyo
+*.nbc
+*.nbi
+
+/tmp/
+
+# Regenerated native validation outputs (tonemap_engine/test_all.sh)
+/native/tonemap_engine/*_out/
+/native/tonemap_engine/test_results/
+/native/tonemap_engine/tonemap_engine_results.zip
+
+# Native CMake build trees (regenerated locally; never commit)
+/native/**/build/
+/native/**/build-macos/
+/native/**/build-*/
+/native/**/build_host/
+/native/**/build_scalar/
+
+# Device logs, traces, and capture dumps
+*.logcat
+RAWR_internal_trace_*.txt
+
+# Local credentials (release signing belongs outside the checkout)
+*.jks
+*.keystore
+/signing.properties
+.env
+.env.*
+!.env.example
+
+# Python environments and tooling caches
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# First-party generated native artifacts (do not hide validation sources/fixtures)
+/native/**/build_*/
+/native/**/build-shaders/
+/native/**/release_logs/
+/native/image_scopes/scope_review/
+/native/raw_demosaic/rcd/validation/*_android/
+/native/raw_demosaic/rcd/validation/*_macos/
+/native/raw_demosaic/rcd/validation/dng_oracle/*_gpu_*
+/native/raw_demosaic/vng4/validation/*_android/
+/native/raw_demosaic/vng4/validation/*_macos/
+/native/raw_demosaic/dual/validation/*_android/
+/native/monitoring_overlays/validation_out/
+/native/**/build*.log
+/tools/**/build/
+/tools/**/build-*/
+/CMakeCache.txt
+/cmake_install.cmake
+/compile_commands.json
+/build.ninja
+/.ninja_deps
+/.ninja_log
+
+# Compiled native outputs
+*.o
+*.a
+*.so
+*.dylib
+*.spv
+
+# Film assets are generated from native/spektrafilm/assets by Gradle
+/app/src/main/assets/spektrafilm/

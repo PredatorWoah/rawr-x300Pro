@@ -1,0 +1,61 @@
+#version 450
+// Lossless inverse of raw_zsl_codec_pack.comp for a packet stored contiguously
+// by zsl_ring as [meta][sizes][offsets][payload]. sizes are retained in the
+// packet contract but are not needed for random pixel decode.
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(set = 0, binding = 0, std430) readonly buffer PacketBuf { uint words[]; }
+PACKET;
+layout(set = 0, binding = 1, r16ui) uniform writeonly uimage2D dstRaw;
+layout(push_constant) uniform PC {
+    uint width;
+    uint height;
+    uint tilesX;
+    uint tilesY;
+    uint streams;
+}
+pc;
+
+uint extractResidual(uint payloadBase, uint streamBase, uint bits, uint sampleIndex) {
+    if (bits == 0u) return 0u;
+    uint bit = sampleIndex * bits;
+    uint wi = bit >> 5u;
+    uint off = bit & 31u;
+    uint lo = PACKET.words[payloadBase + streamBase + wi] >> off;
+    uint value = lo;
+    if (off + bits > 32u) {
+        value |= PACKET.words[payloadBase + streamBase + wi + 1u] << (32u - off);
+    }
+    uint mask = (bits == 32u) ? 0xffffffffu : ((1u << bits) - 1u);
+    return value & mask;
+}
+
+void main() {
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+    if (x >= pc.width || y >= pc.height) return;
+
+    uint tx = x >> 5u;
+    uint ty = y >> 5u;
+    uint tile = ty * pc.tilesX + tx;
+    uint parity = (y & 1u) * 2u + (x & 1u);
+    uint stream = tile * 4u + parity;
+    if (stream >= pc.streams) return;
+
+    uint metaBase = 0u;
+    uint offsetsBase = pc.streams * 2u;
+    uint payloadBase = pc.streams * 3u;
+    uint m = PACKET.words[metaBase + stream];
+    uint minimum = m & 0xffffu;
+    uint bits = (m >> 16u) & 31u;
+    uint x0 = tx * 32u;
+    uint y0 = ty * 32u;
+    uint px = parity & 1u;
+    uint py = parity >> 1u;
+    uint validW = (x0 + px < pc.width) ? ((min(x0 + 32u, pc.width) - x0 - px + 1u) >> 1u) : 0u;
+    uint sx = (x - x0 - px) >> 1u;
+    uint sy = (y - y0 - py) >> 1u;
+    uint sampleIndex = sy * validW + sx;
+    uint streamBase = PACKET.words[offsetsBase + stream];
+    uint decoded = minimum + extractResidual(payloadBase, streamBase, bits, sampleIndex);
+    imageStore(dstRaw, ivec2(x, y), uvec4(decoded, 0u, 0u, 0u));
+}

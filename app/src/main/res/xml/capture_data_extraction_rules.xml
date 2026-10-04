@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="still_jobs/" />
+        <!-- Device-local thumbnail URI cache: MediaStore IDs are not stable across restores. -->
+        <exclude domain="sharedpref" path="gallery_thumbnail.xml" />
+        <!-- Device-local imports: LUT binaries + Vulkan driver .so files stay on this device. -->
+        <exclude domain="file" path="lut_profiles/" />
+        <exclude domain="file" path="gpu_driver/" />
+        <exclude domain="file" path="gpu_driver_staging/" />
+        <exclude domain="sharedpref" path="gpu_driver_bootstrap.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="still_jobs/" />
+        <exclude domain="sharedpref" path="gallery_thumbnail.xml" />
+        <exclude domain="file" path="lut_profiles/" />
+        <exclude domain="file" path="gpu_driver/" />
+        <exclude domain="file" path="gpu_driver_staging/" />
+        <exclude domain="sharedpref" path="gpu_driver_bootstrap.xml" />
+    </device-transfer>
+</data-extraction-rules>

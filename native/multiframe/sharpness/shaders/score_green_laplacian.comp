@@ -1,0 +1,76 @@
+#version 450
+
+// Per-frame sharpness score for multiframe reference selection.
+// Mean-normalized variance of a green-channel Laplacian over the RAW16 burst
+// frame. Mirrors the host reference in MultiframeSharpness.cpp (same taps,
+// same green lattice, same saturation skip) so offline analysis stays
+// comparable. Each workgroup reduces to one vec4 partial
+// (sum, sumSq, sigSum, count); the host finishes the 64-partial reduction in
+// double precision and forms var / mean^2.
+
+layout(local_size_x = 256) in;
+layout(set = 0, binding = 0, r16ui) readonly uniform uimage2D rawFrame;
+layout(set = 0, binding = 1, std430) buffer Partials {
+    vec4 partials[];
+};
+
+layout(push_constant) uniform Parameters {
+    uint width;
+    uint height;
+    uint cfa;
+    float whiteLevel;
+    uint frameSlot;
+    uint workgroupCount;
+}
+p;
+
+shared vec4 tile[256];
+
+bool isGreen(uint x, uint y) {
+    bool odd = ((x + y) & 1u) != 0u;
+    return (p.cfa == 1u || p.cfa == 2u) ? !odd : odd;
+}
+
+void main() {
+    uint lid = gl_LocalInvocationID.x;
+    uint thread = gl_WorkGroupID.x * 256u + lid;
+    uint total = p.workgroupCount * 256u;
+    uint linearTotal = p.width * p.height;
+    // Linear stride, every 2nd pixel: threads in a warp read nearby pixels
+    // in the same iteration (coalesced) at half the sample count. Do NOT
+    // rechunk into contiguous per-thread ranges: adjacent threads would
+    // land hundreds of pixels apart and uncoalesce every access (measured
+    // 24ms -> 57ms on M5). Ranking is unaffected; the count stays far
+    // above the stability floor.
+    float sum = 0.0;
+    float sumSq = 0.0;
+    float sigSum = 0.0;
+    float count = 0.0;
+    for (uint lin = thread * 2u; lin < linearTotal; lin += total * 2u) {
+        uint x = lin % p.width;
+        uint y = lin / p.width;
+        if (x < 2u || x + 2u >= p.width || y < 2u || y + 2u >= p.height) continue;
+        if (!isGreen(x, y)) continue;
+        ivec2 q = ivec2(x, y);
+        float c = float(imageLoad(rawFrame, q).x);
+        float l = float(imageLoad(rawFrame, q + ivec2(-2, 0)).x);
+        float r = float(imageLoad(rawFrame, q + ivec2(2, 0)).x);
+        float u = float(imageLoad(rawFrame, q + ivec2(0, -2)).x);
+        float d = float(imageLoad(rawFrame, q + ivec2(0, 2)).x);
+        if (c >= p.whiteLevel || l >= p.whiteLevel || r >= p.whiteLevel || u >= p.whiteLevel ||
+            d >= p.whiteLevel)
+            continue;
+        float lap = 4.0 * c - l - r - u - d;
+        sum += lap;
+        sumSq += lap * lap;
+        sigSum += c;
+        count += 1.0;
+    }
+    tile[lid] = vec4(sum, sumSq, sigSum, count);
+    barrier();
+    for (uint stride = 128u; stride > 0u; stride >>= 1u) {
+        if (lid < stride) tile[lid] += tile[lid + stride];
+        barrier();
+    }
+    if (lid == 0u) partials[p.frameSlot * p.workgroupCount + gl_WorkGroupID.x] = tile[0];
+}

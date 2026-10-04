@@ -1,0 +1,3950 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#ifndef VNG4_WGX
+#define VNG4_WGX 16
+#endif
+#ifndef VNG4_WGY
+#define VNG4_WGY 16
+#endif
+layout(local_size_x = VNG4_WGX, local_size_y = VNG4_WGY, local_size_z = 1) in;
+#include "vng4_common.glsl"
+
+void green_p0_c0(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=0 parity=0,0 centerColor=0
+    const int centerColor = 0;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[1] - working4(p + ivec2(-1, 0))[1]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[1] - working4(p + ivec2(1, 0))[1]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[1] - working4(p + ivec2(-1, 0))[1]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[1] - working4(p + ivec2(1, 0))[1]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[3] - working4(p + ivec2(0, -1))[3]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(1, -1))[2]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(-1, 1))[2]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(1, 1))[2]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(2, -1))[3]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(-2, 1))[3]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(2, 1))[3]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[2] - working4(p + ivec2(-1, 1))[2]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[2] - working4(p + ivec2(1, 1))[2]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(1, 0))[1]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(-1, 2))[1]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(1, 2))[1]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(2, 0))[0]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(-2, 2))[0]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(0, 2))[0]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(2, 2))[0]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[1] - working4(p + ivec2(-1, 2))[1]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[1] - working4(p + ivec2(1, 2))[1]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[3] - working4(p + ivec2(0, 1))[3]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[2] - working4(p + ivec2(1, 1))[2]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[3] - working4(p + ivec2(2, 1))[3]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[0];
+        vec4 n = working4(p + ivec2(-1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[0];
+        vec4 n = working4(p + ivec2(0, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[0];
+        vec4 n = working4(p + ivec2(1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[0];
+        vec4 n = working4(p + ivec2(1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[0];
+        vec4 n = working4(p + ivec2(1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[0];
+        vec4 n = working4(p + ivec2(0, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[0];
+        vec4 n = working4(p + ivec2(-1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[0];
+        vec4 n = working4(p + ivec2(-1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p0_c1(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=0 parity=1,0 centerColor=1
+    const int centerColor = 1;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[0] - working4(p + ivec2(-1, 0))[0]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[0] - working4(p + ivec2(1, 0))[0]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[0] - working4(p + ivec2(-1, 0))[0]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[0] - working4(p + ivec2(1, 0))[0]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[2] - working4(p + ivec2(0, -1))[2]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(1, -1))[3]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(-1, 1))[3]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(1, 1))[3]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(2, -1))[2]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(-2, 1))[2]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(2, 1))[2]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[3] - working4(p + ivec2(-1, 1))[3]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[3] - working4(p + ivec2(1, 1))[3]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(1, 0))[0]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(-1, 2))[0]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(1, 2))[0]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(2, 0))[1]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(-2, 2))[1]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(0, 2))[1]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(2, 2))[1]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[0] - working4(p + ivec2(-1, 2))[0]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[0] - working4(p + ivec2(1, 2))[0]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[2] - working4(p + ivec2(0, 1))[2]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[3] - working4(p + ivec2(1, 1))[3]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[2] - working4(p + ivec2(2, 1))[2]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[1];
+        sum1 += working4(p + ivec2(-1, -1))[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[1];
+        sum1 += working4(p + ivec2(0, -1))[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[1];
+        sum1 += working4(p + ivec2(1, -1))[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[1];
+        sum1 += working4(p + ivec2(1, 0))[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[1];
+        sum1 += working4(p + ivec2(1, 1))[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[1];
+        sum1 += working4(p + ivec2(0, 1))[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[1];
+        sum1 += working4(p + ivec2(-1, 1))[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[1];
+        sum1 += working4(p + ivec2(-1, 0))[3];
+        num++;
+    }
+    sum0 *= 0.5;
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p0_c2(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=0 parity=0,1 centerColor=3
+    const int centerColor = 3;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[2] - working4(p + ivec2(-1, 0))[2]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[2] - working4(p + ivec2(1, 0))[2]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[2] - working4(p + ivec2(-1, 0))[2]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[2] - working4(p + ivec2(1, 0))[2]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[0] - working4(p + ivec2(0, -1))[0]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(1, -1))[1]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(-1, 1))[1]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(1, 1))[1]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(2, -1))[0]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(-2, 1))[0]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(2, 1))[0]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[1] - working4(p + ivec2(-1, 1))[1]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[1] - working4(p + ivec2(1, 1))[1]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(1, 0))[2]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(-1, 2))[2]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(1, 2))[2]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(2, 0))[3]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(-2, 2))[3]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(0, 2))[3]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(2, 2))[3]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[2] - working4(p + ivec2(-1, 2))[2]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[2] - working4(p + ivec2(1, 2))[2]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[0] - working4(p + ivec2(0, 1))[0]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[1] - working4(p + ivec2(1, 1))[1]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[0] - working4(p + ivec2(2, 1))[0]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[3];
+        sum1 += working4(p + ivec2(-1, -1))[1];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[3];
+        sum1 += working4(p + ivec2(0, -1))[1];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[3];
+        sum1 += working4(p + ivec2(1, -1))[1];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[3];
+        sum1 += working4(p + ivec2(1, 0))[1];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[3];
+        sum1 += working4(p + ivec2(1, 1))[1];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[3];
+        sum1 += working4(p + ivec2(0, 1))[1];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[3];
+        sum1 += working4(p + ivec2(-1, 1))[1];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[3];
+        sum1 += working4(p + ivec2(-1, 0))[1];
+        num++;
+    }
+    sum0 *= 0.5;
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p0_c3(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=0 parity=1,1 centerColor=2
+    const int centerColor = 2;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[3] - working4(p + ivec2(-1, 0))[3]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[3] - working4(p + ivec2(1, 0))[3]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[3] - working4(p + ivec2(-1, 0))[3]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[3] - working4(p + ivec2(1, 0))[3]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[1] - working4(p + ivec2(0, -1))[1]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(1, -1))[0]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(-1, 1))[0]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(1, 1))[0]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(2, -1))[1]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(-2, 1))[1]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(2, 1))[1]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[0] - working4(p + ivec2(-1, 1))[0]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[0] - working4(p + ivec2(1, 1))[0]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(1, 0))[3]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(-1, 2))[3]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(1, 2))[3]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(2, 0))[2]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(-2, 2))[2]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(0, 2))[2]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(2, 2))[2]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[3] - working4(p + ivec2(-1, 2))[3]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[3] - working4(p + ivec2(1, 2))[3]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[1] - working4(p + ivec2(0, 1))[1]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[0] - working4(p + ivec2(1, 1))[0]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[1] - working4(p + ivec2(2, 1))[1]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[2];
+        vec4 n = working4(p + ivec2(-1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[2];
+        vec4 n = working4(p + ivec2(0, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[2];
+        vec4 n = working4(p + ivec2(1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[2];
+        vec4 n = working4(p + ivec2(1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[2];
+        vec4 n = working4(p + ivec2(1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[2];
+        vec4 n = working4(p + ivec2(0, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[2];
+        vec4 n = working4(p + ivec2(-1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[2];
+        vec4 n = working4(p + ivec2(-1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p1_c0(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=1 parity=0,0 centerColor=1
+    const int centerColor = 1;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[0] - working4(p + ivec2(-1, 0))[0]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[0] - working4(p + ivec2(1, 0))[0]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[0] - working4(p + ivec2(-1, 0))[0]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[0] - working4(p + ivec2(1, 0))[0]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[2] - working4(p + ivec2(0, -1))[2]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(1, -1))[3]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(-1, 1))[3]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(1, 1))[3]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(2, -1))[2]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(-2, 1))[2]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(2, 1))[2]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[3] - working4(p + ivec2(-1, 1))[3]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[3] - working4(p + ivec2(1, 1))[3]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(1, 0))[0]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(-1, 2))[0]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(1, 2))[0]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(2, 0))[1]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(-2, 2))[1]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(0, 2))[1]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(2, 2))[1]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[0] - working4(p + ivec2(-1, 2))[0]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[0] - working4(p + ivec2(1, 2))[0]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[2] - working4(p + ivec2(0, 1))[2]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[3] - working4(p + ivec2(1, 1))[3]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[2] - working4(p + ivec2(2, 1))[2]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[1];
+        sum1 += working4(p + ivec2(-1, -1))[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[1];
+        sum1 += working4(p + ivec2(0, -1))[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[1];
+        sum1 += working4(p + ivec2(1, -1))[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[1];
+        sum1 += working4(p + ivec2(1, 0))[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[1];
+        sum1 += working4(p + ivec2(1, 1))[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[1];
+        sum1 += working4(p + ivec2(0, 1))[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[1];
+        sum1 += working4(p + ivec2(-1, 1))[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[1];
+        sum1 += working4(p + ivec2(-1, 0))[3];
+        num++;
+    }
+    sum0 *= 0.5;
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p1_c1(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=1 parity=1,0 centerColor=0
+    const int centerColor = 0;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[1] - working4(p + ivec2(-1, 0))[1]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[1] - working4(p + ivec2(1, 0))[1]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[1] - working4(p + ivec2(-1, 0))[1]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[1] - working4(p + ivec2(1, 0))[1]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[3] - working4(p + ivec2(0, -1))[3]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(1, -1))[2]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(-1, 1))[2]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(1, 1))[2]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(2, -1))[3]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(-2, 1))[3]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(2, 1))[3]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[2] - working4(p + ivec2(-1, 1))[2]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[2] - working4(p + ivec2(1, 1))[2]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(1, 0))[1]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(-1, 2))[1]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(1, 2))[1]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(2, 0))[0]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(-2, 2))[0]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(0, 2))[0]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(2, 2))[0]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[1] - working4(p + ivec2(-1, 2))[1]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[1] - working4(p + ivec2(1, 2))[1]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[3] - working4(p + ivec2(0, 1))[3]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[2] - working4(p + ivec2(1, 1))[2]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[3] - working4(p + ivec2(2, 1))[3]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[0];
+        vec4 n = working4(p + ivec2(-1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[0];
+        vec4 n = working4(p + ivec2(0, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[0];
+        vec4 n = working4(p + ivec2(1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[0];
+        vec4 n = working4(p + ivec2(1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[0];
+        vec4 n = working4(p + ivec2(1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[0];
+        vec4 n = working4(p + ivec2(0, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[0];
+        vec4 n = working4(p + ivec2(-1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[0];
+        vec4 n = working4(p + ivec2(-1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p1_c2(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=1 parity=0,1 centerColor=2
+    const int centerColor = 2;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[3] - working4(p + ivec2(-1, 0))[3]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[3] - working4(p + ivec2(1, 0))[3]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[3] - working4(p + ivec2(-1, 0))[3]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[3] - working4(p + ivec2(1, 0))[3]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[1] - working4(p + ivec2(0, -1))[1]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(1, -1))[0]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(-1, 1))[0]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(1, 1))[0]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(2, -1))[1]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(-2, 1))[1]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(2, 1))[1]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[0] - working4(p + ivec2(-1, 1))[0]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[0] - working4(p + ivec2(1, 1))[0]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(1, 0))[3]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(-1, 2))[3]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(1, 2))[3]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(2, 0))[2]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(-2, 2))[2]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(0, 2))[2]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(2, 2))[2]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[3] - working4(p + ivec2(-1, 2))[3]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[3] - working4(p + ivec2(1, 2))[3]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[1] - working4(p + ivec2(0, 1))[1]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[0] - working4(p + ivec2(1, 1))[0]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[1] - working4(p + ivec2(2, 1))[1]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[2];
+        vec4 n = working4(p + ivec2(-1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[2];
+        vec4 n = working4(p + ivec2(0, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[2];
+        vec4 n = working4(p + ivec2(1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[2];
+        vec4 n = working4(p + ivec2(1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[2];
+        vec4 n = working4(p + ivec2(1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[2];
+        vec4 n = working4(p + ivec2(0, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[2];
+        vec4 n = working4(p + ivec2(-1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[2];
+        vec4 n = working4(p + ivec2(-1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p1_c3(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=1 parity=1,1 centerColor=3
+    const int centerColor = 3;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[2] - working4(p + ivec2(-1, 0))[2]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[2] - working4(p + ivec2(1, 0))[2]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[2] - working4(p + ivec2(-1, 0))[2]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[2] - working4(p + ivec2(1, 0))[2]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[0] - working4(p + ivec2(0, -1))[0]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(1, -1))[1]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(-1, 1))[1]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(1, 1))[1]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(2, -1))[0]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(-2, 1))[0]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(2, 1))[0]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[1] - working4(p + ivec2(-1, 1))[1]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[1] - working4(p + ivec2(1, 1))[1]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(1, 0))[2]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(-1, 2))[2]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(1, 2))[2]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(2, 0))[3]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(-2, 2))[3]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(0, 2))[3]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(2, 2))[3]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[2] - working4(p + ivec2(-1, 2))[2]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[2] - working4(p + ivec2(1, 2))[2]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[0] - working4(p + ivec2(0, 1))[0]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[1] - working4(p + ivec2(1, 1))[1]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[0] - working4(p + ivec2(2, 1))[0]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[3];
+        sum1 += working4(p + ivec2(-1, -1))[1];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[3];
+        sum1 += working4(p + ivec2(0, -1))[1];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[3];
+        sum1 += working4(p + ivec2(1, -1))[1];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[3];
+        sum1 += working4(p + ivec2(1, 0))[1];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[3];
+        sum1 += working4(p + ivec2(1, 1))[1];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[3];
+        sum1 += working4(p + ivec2(0, 1))[1];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[3];
+        sum1 += working4(p + ivec2(-1, 1))[1];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[3];
+        sum1 += working4(p + ivec2(-1, 0))[1];
+        num++;
+    }
+    sum0 *= 0.5;
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p2_c0(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=2 parity=0,0 centerColor=3
+    const int centerColor = 3;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[2] - working4(p + ivec2(-1, 0))[2]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[2] - working4(p + ivec2(1, 0))[2]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[2] - working4(p + ivec2(-1, 0))[2]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[2] - working4(p + ivec2(1, 0))[2]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[0] - working4(p + ivec2(0, -1))[0]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(1, -1))[1]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(-1, 1))[1]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(1, 1))[1]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(2, -1))[0]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(-2, 1))[0]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(2, 1))[0]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[1] - working4(p + ivec2(-1, 1))[1]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[1] - working4(p + ivec2(1, 1))[1]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(1, 0))[2]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(-1, 2))[2]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(1, 2))[2]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(2, 0))[3]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(-2, 2))[3]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(0, 2))[3]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(2, 2))[3]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[2] - working4(p + ivec2(-1, 2))[2]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[2] - working4(p + ivec2(1, 2))[2]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[0] - working4(p + ivec2(0, 1))[0]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[1] - working4(p + ivec2(1, 1))[1]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[0] - working4(p + ivec2(2, 1))[0]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[3];
+        sum1 += working4(p + ivec2(-1, -1))[1];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[3];
+        sum1 += working4(p + ivec2(0, -1))[1];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[3];
+        sum1 += working4(p + ivec2(1, -1))[1];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[3];
+        sum1 += working4(p + ivec2(1, 0))[1];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[3];
+        sum1 += working4(p + ivec2(1, 1))[1];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[3];
+        sum1 += working4(p + ivec2(0, 1))[1];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[3];
+        sum1 += working4(p + ivec2(-1, 1))[1];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[3];
+        sum1 += working4(p + ivec2(-1, 0))[1];
+        num++;
+    }
+    sum0 *= 0.5;
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p2_c1(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=2 parity=1,0 centerColor=2
+    const int centerColor = 2;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[3] - working4(p + ivec2(-1, 0))[3]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[3] - working4(p + ivec2(1, 0))[3]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[3] - working4(p + ivec2(-1, 0))[3]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[3] - working4(p + ivec2(1, 0))[3]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[1] - working4(p + ivec2(0, -1))[1]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(1, -1))[0]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(-1, 1))[0]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(1, 1))[0]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(2, -1))[1]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(-2, 1))[1]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(2, 1))[1]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[0] - working4(p + ivec2(-1, 1))[0]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[0] - working4(p + ivec2(1, 1))[0]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(1, 0))[3]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(-1, 2))[3]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(1, 2))[3]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(2, 0))[2]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(-2, 2))[2]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(0, 2))[2]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(2, 2))[2]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[3] - working4(p + ivec2(-1, 2))[3]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[3] - working4(p + ivec2(1, 2))[3]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[1] - working4(p + ivec2(0, 1))[1]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[0] - working4(p + ivec2(1, 1))[0]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[1] - working4(p + ivec2(2, 1))[1]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[2];
+        vec4 n = working4(p + ivec2(-1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[2];
+        vec4 n = working4(p + ivec2(0, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[2];
+        vec4 n = working4(p + ivec2(1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[2];
+        vec4 n = working4(p + ivec2(1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[2];
+        vec4 n = working4(p + ivec2(1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[2];
+        vec4 n = working4(p + ivec2(0, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[2];
+        vec4 n = working4(p + ivec2(-1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[2];
+        vec4 n = working4(p + ivec2(-1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p2_c2(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=2 parity=0,1 centerColor=0
+    const int centerColor = 0;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[1] - working4(p + ivec2(-1, 0))[1]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[1] - working4(p + ivec2(1, 0))[1]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[1] - working4(p + ivec2(-1, 0))[1]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[1] - working4(p + ivec2(1, 0))[1]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[3] - working4(p + ivec2(0, -1))[3]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(1, -1))[2]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(-1, 1))[2]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(1, 1))[2]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(2, -1))[3]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(-2, 1))[3]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(2, 1))[3]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[2] - working4(p + ivec2(-1, 1))[2]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[2] - working4(p + ivec2(1, 1))[2]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(1, 0))[1]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(-1, 2))[1]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(1, 2))[1]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(2, 0))[0]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(-2, 2))[0]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(0, 2))[0]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(2, 2))[0]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[1] - working4(p + ivec2(-1, 2))[1]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[1] - working4(p + ivec2(1, 2))[1]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[3] - working4(p + ivec2(0, 1))[3]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[2] - working4(p + ivec2(1, 1))[2]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[3] - working4(p + ivec2(2, 1))[3]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[0];
+        vec4 n = working4(p + ivec2(-1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[0];
+        vec4 n = working4(p + ivec2(0, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[0];
+        vec4 n = working4(p + ivec2(1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[0];
+        vec4 n = working4(p + ivec2(1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[0];
+        vec4 n = working4(p + ivec2(1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[0];
+        vec4 n = working4(p + ivec2(0, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[0];
+        vec4 n = working4(p + ivec2(-1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[0];
+        vec4 n = working4(p + ivec2(-1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p2_c3(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=2 parity=1,1 centerColor=1
+    const int centerColor = 1;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[0] - working4(p + ivec2(-1, 0))[0]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[0] - working4(p + ivec2(1, 0))[0]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[0] - working4(p + ivec2(-1, 0))[0]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[0] - working4(p + ivec2(1, 0))[0]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[2] - working4(p + ivec2(0, -1))[2]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(1, -1))[3]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(-1, 1))[3]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(1, 1))[3]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(2, -1))[2]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(-2, 1))[2]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(2, 1))[2]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[3] - working4(p + ivec2(-1, 1))[3]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[3] - working4(p + ivec2(1, 1))[3]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(1, 0))[0]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(-1, 2))[0]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(1, 2))[0]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(2, 0))[1]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(-2, 2))[1]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(0, 2))[1]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(2, 2))[1]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[0] - working4(p + ivec2(-1, 2))[0]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[0] - working4(p + ivec2(1, 2))[0]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[2] - working4(p + ivec2(0, 1))[2]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[3] - working4(p + ivec2(1, 1))[3]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[2] - working4(p + ivec2(2, 1))[2]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[1];
+        sum1 += working4(p + ivec2(-1, -1))[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[1];
+        sum1 += working4(p + ivec2(0, -1))[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[1];
+        sum1 += working4(p + ivec2(1, -1))[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[1];
+        sum1 += working4(p + ivec2(1, 0))[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[1];
+        sum1 += working4(p + ivec2(1, 1))[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[1];
+        sum1 += working4(p + ivec2(0, 1))[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[1];
+        sum1 += working4(p + ivec2(-1, 1))[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[1];
+        sum1 += working4(p + ivec2(-1, 0))[3];
+        num++;
+    }
+    sum0 *= 0.5;
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p3_c0(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=3 parity=0,0 centerColor=2
+    const int centerColor = 2;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[3] - working4(p + ivec2(-1, 0))[3]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[3] - working4(p + ivec2(1, 0))[3]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[3] - working4(p + ivec2(-1, 0))[3]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[3] - working4(p + ivec2(1, 0))[3]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[1] - working4(p + ivec2(0, -1))[1]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(1, -1))[0]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(-1, 1))[0]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[0] - working4(p + ivec2(1, 1))[0]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(2, -1))[1]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(-2, 1))[1]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[1] - working4(p + ivec2(2, 1))[1]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[0] - working4(p + ivec2(-1, 1))[0]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[0] - working4(p + ivec2(1, 1))[0]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[1] - working4(p + ivec2(0, 1))[1]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[2] - working4(p + ivec2(0, 0))[2]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(1, 0))[3]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(-1, 2))[3]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[3] - working4(p + ivec2(1, 2))[3]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(2, 0))[2]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(-2, 2))[2]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(0, 2))[2]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[2] - working4(p + ivec2(2, 2))[2]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[3] - working4(p + ivec2(-1, 2))[3]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[3] - working4(p + ivec2(1, 2))[3]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[1] - working4(p + ivec2(0, 1))[1]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[0] - working4(p + ivec2(1, 1))[0]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[1] - working4(p + ivec2(2, 1))[1]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[2];
+        vec4 n = working4(p + ivec2(-1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[2];
+        vec4 n = working4(p + ivec2(0, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[2];
+        vec4 n = working4(p + ivec2(1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[2];
+        vec4 n = working4(p + ivec2(1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[2];
+        vec4 n = working4(p + ivec2(1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[2];
+        vec4 n = working4(p + ivec2(0, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[2];
+        vec4 n = working4(p + ivec2(-1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[2];
+        vec4 n = working4(p + ivec2(-1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p3_c1(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=3 parity=1,0 centerColor=3
+    const int centerColor = 3;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[2] - working4(p + ivec2(-1, 0))[2]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[2] - working4(p + ivec2(1, 0))[2]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[2] - working4(p + ivec2(-1, 0))[2]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[2] - working4(p + ivec2(1, 0))[2]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[0] - working4(p + ivec2(0, -1))[0]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(1, -1))[1]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(-1, 1))[1]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[1] - working4(p + ivec2(1, 1))[1]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(2, -1))[0]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(-2, 1))[0]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[0] - working4(p + ivec2(2, 1))[0]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[1] - working4(p + ivec2(-1, 1))[1]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[1] - working4(p + ivec2(1, 1))[1]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[0] - working4(p + ivec2(0, 1))[0]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[3] - working4(p + ivec2(0, 0))[3]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(1, 0))[2]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(-1, 2))[2]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[2] - working4(p + ivec2(1, 2))[2]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(2, 0))[3]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(-2, 2))[3]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(0, 2))[3]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[3] - working4(p + ivec2(2, 2))[3]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[2] - working4(p + ivec2(-1, 2))[2]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[2] - working4(p + ivec2(1, 2))[2]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[0] - working4(p + ivec2(0, 1))[0]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[1] - working4(p + ivec2(1, 1))[1]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[0] - working4(p + ivec2(2, 1))[0]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[3];
+        sum1 += working4(p + ivec2(-1, -1))[1];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[3];
+        sum1 += working4(p + ivec2(0, -1))[1];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[3];
+        sum1 += working4(p + ivec2(1, -1))[1];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[3];
+        sum1 += working4(p + ivec2(1, 0))[1];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[3];
+        sum1 += working4(p + ivec2(1, 1))[1];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[3];
+        sum1 += working4(p + ivec2(0, 1))[1];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[3];
+        sum1 += working4(p + ivec2(-1, 1))[1];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[3];
+        sum1 += working4(p + ivec2(-1, 0))[1];
+        num++;
+    }
+    sum0 *= 0.5;
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p3_c2(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=3 parity=0,1 centerColor=1
+    const int centerColor = 1;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[0] - working4(p + ivec2(-1, 0))[0]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[0] - working4(p + ivec2(1, 0))[0]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[0] - working4(p + ivec2(-1, 0))[0]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[0] - working4(p + ivec2(1, 0))[0]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[2] - working4(p + ivec2(0, -1))[2]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(1, -1))[3]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(-1, 1))[3]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[3] - working4(p + ivec2(1, 1))[3]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(2, -1))[2]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(-2, 1))[2]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[2] - working4(p + ivec2(2, 1))[2]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[3] - working4(p + ivec2(-1, 1))[3]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[3] - working4(p + ivec2(1, 1))[3]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[2] - working4(p + ivec2(0, 1))[2]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[1] - working4(p + ivec2(0, 0))[1]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(1, 0))[0]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(-1, 2))[0]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[0] - working4(p + ivec2(1, 2))[0]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(2, 0))[1]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(-2, 2))[1]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(0, 2))[1]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[1] - working4(p + ivec2(2, 2))[1]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[0] - working4(p + ivec2(-1, 2))[0]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[0] - working4(p + ivec2(1, 2))[0]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[2] - working4(p + ivec2(0, 1))[2]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[3] - working4(p + ivec2(1, 1))[3]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[2] - working4(p + ivec2(2, 1))[2]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[1];
+        sum1 += working4(p + ivec2(-1, -1))[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[1];
+        sum1 += working4(p + ivec2(0, -1))[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[1];
+        sum1 += working4(p + ivec2(1, -1))[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[1];
+        sum1 += working4(p + ivec2(1, 0))[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[1];
+        sum1 += working4(p + ivec2(1, 1))[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[1];
+        sum1 += working4(p + ivec2(0, 1))[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[1];
+        sum1 += working4(p + ivec2(-1, 1))[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[1];
+        sum1 += working4(p + ivec2(-1, 0))[3];
+        num++;
+    }
+    sum0 *= 0.5;
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void green_p3_c3(ivec2 p) {
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    if (!inside(p, 2)) {
+        imageStore(greenImage, p, vec4(0));
+        return;
+    }
+    // pattern=3 parity=1,1 centerColor=0
+    const int centerColor = 0;
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    {
+        precise float d = abs(working4(p + ivec2(-2, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n1_0 = gval[0] + d;
+        gval[0] = n1_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[1] - working4(p + ivec2(-1, 0))[1]) * float(1);
+        precise float n3_1 = gval[1] + d;
+        gval[1] = n3_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -2))[1] - working4(p + ivec2(1, 0))[1]) * float(2);
+        precise float n5_0 = gval[0] + d;
+        gval[0] = n5_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n7_1 = gval[1] + d;
+        gval[1] = n7_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[1] - working4(p + ivec2(-1, 0))[1]) * float(2);
+        precise float n10_2 = gval[2] + d;
+        gval[2] = n10_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -2))[1] - working4(p + ivec2(1, 0))[1]) * float(1);
+        precise float n12_1 = gval[1] + d;
+        gval[1] = n12_1;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -2))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n13_2 = gval[2] + d;
+        gval[2] = n13_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[3] - working4(p + ivec2(0, -1))[3]) * float(1);
+        precise float n15_7 = gval[7] + d;
+        gval[7] = n15_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n18_0 = gval[0] + d;
+        gval[0] = n18_0;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(1, -1))[2]) * float(1);
+        precise float n19_3 = gval[3] + d;
+        gval[3] = n19_3;
+        precise float n19_7 = gval[7] + d;
+        gval[7] = n19_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(-1, 1))[2]) * float(1);
+        precise float n21_1 = gval[1] + d;
+        gval[1] = n21_1;
+        precise float n21_5 = gval[5] + d;
+        gval[5] = n21_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, -1))[2] - working4(p + ivec2(1, 1))[2]) * float(2);
+        precise float n23_0 = gval[0] + d;
+        gval[0] = n23_0;
+        precise float n23_4 = gval[4] + d;
+        gval[4] = n23_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(2, -1))[3]) * float(1);
+        precise float n24_3 = gval[3] + d;
+        gval[3] = n24_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(-2, 1))[3]) * float(2);
+        precise float n27_6 = gval[6] + d;
+        gval[6] = n27_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n29_1 = gval[1] + d;
+        gval[1] = n29_1;
+        precise float n29_5 = gval[5] + d;
+        gval[5] = n29_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, -1))[3] - working4(p + ivec2(2, 1))[3]) * float(2);
+        precise float n31_4 = gval[4] + d;
+        gval[4] = n31_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[2] - working4(p + ivec2(-1, 1))[2]) * float(2);
+        precise float n32_2 = gval[2] + d;
+        gval[2] = n32_2;
+        precise float n32_6 = gval[6] + d;
+        gval[6] = n32_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, -1))[2] - working4(p + ivec2(1, 1))[2]) * float(1);
+        precise float n34_1 = gval[1] + d;
+        gval[1] = n34_1;
+        precise float n34_5 = gval[5] + d;
+        gval[5] = n34_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(2, -1))[3] - working4(p + ivec2(0, 1))[3]) * float(2);
+        precise float n37_2 = gval[2] + d;
+        gval[2] = n37_2;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 0))[0] - working4(p + ivec2(0, 0))[0]) * float(2);
+        precise float n39_7 = gval[7] + d;
+        gval[7] = n39_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(1, 0))[1]) * float(2);
+        precise float n40_3 = gval[3] + d;
+        gval[3] = n40_3;
+        precise float n40_7 = gval[7] + d;
+        gval[7] = n40_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(-1, 2))[1]) * float(1);
+        precise float n44_5 = gval[5] + d;
+        gval[5] = n44_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 0))[1] - working4(p + ivec2(1, 2))[1]) * float(2);
+        precise float n46_4 = gval[4] + d;
+        gval[4] = n46_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(2, 0))[0]) * float(2);
+        precise float n47_3 = gval[3] + d;
+        gval[3] = n47_3;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(-2, 2))[0]) * float(2);
+        precise float n48_6 = gval[6] + d;
+        gval[6] = n48_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(0, 2))[0]) * float(2);
+        precise float n50_5 = gval[5] + d;
+        gval[5] = n50_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 0))[0] - working4(p + ivec2(2, 2))[0]) * float(2);
+        precise float n52_4 = gval[4] + d;
+        gval[4] = n52_4;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[1] - working4(p + ivec2(-1, 2))[1]) * float(2);
+        precise float n55_6 = gval[6] + d;
+        gval[6] = n55_6;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(1, 0))[1] - working4(p + ivec2(1, 2))[1]) * float(1);
+        precise float n57_5 = gval[5] + d;
+        gval[5] = n57_5;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-2, 1))[3] - working4(p + ivec2(0, 1))[3]) * float(1);
+        precise float n59_7 = gval[7] + d;
+        gval[7] = n59_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(-1, 1))[2] - working4(p + ivec2(1, 1))[2]) * float(1);
+        precise float n60_3 = gval[3] + d;
+        gval[3] = n60_3;
+        precise float n60_7 = gval[7] + d;
+        gval[7] = n60_7;
+    }
+    {
+        precise float d = abs(working4(p + ivec2(0, 1))[3] - working4(p + ivec2(2, 1))[3]) * float(1);
+        precise float n61_3 = gval[3] + d;
+        gval[3] = n61_3;
+    }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    vec4 center = working4(p);
+    float greenval = center[centerColor];
+    float sum0 = 0, sum1 = 0;
+    int num = 0;
+    if (gval[0] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, -2))[0];
+        vec4 n = working4(p + ivec2(-1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[1] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, -2))[0];
+        vec4 n = working4(p + ivec2(0, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[2] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, -2))[0];
+        vec4 n = working4(p + ivec2(1, -1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[3] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 0))[0];
+        vec4 n = working4(p + ivec2(1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[4] <= th) {
+        sum0 += greenval + working4(p + ivec2(2, 2))[0];
+        vec4 n = working4(p + ivec2(1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[5] <= th) {
+        sum0 += greenval + working4(p + ivec2(0, 2))[0];
+        vec4 n = working4(p + ivec2(0, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[6] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 2))[0];
+        vec4 n = working4(p + ivec2(-1, 1));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    if (gval[7] <= th) {
+        sum0 += greenval + working4(p + ivec2(-2, 0))[0];
+        vec4 n = working4(p + ivec2(-1, 0));
+        sum1 += n[1] + n[3];
+        num++;
+    }
+    imageStore(greenImage, p, vec4(greenval + (sum1 - sum0) / (2.0 * float(num)), 0, 0, 0));
+}
+
+void main() {
+    if (pc.pattern == 0u) {
+        ivec2 b = ivec2(int(gl_GlobalInvocationID.x) * 2, int(gl_GlobalInvocationID.y));
+        int yp = b.y & 1;
+        if (yp == 0) {
+            green_p0_c0(b);
+            green_p0_c1(b + ivec2(1, 0));
+        } else {
+            green_p0_c2(b);
+            green_p0_c3(b + ivec2(1, 0));
+        }
+    } else if (pc.pattern == 1u) {
+        ivec2 b = ivec2(int(gl_GlobalInvocationID.x) * 2, int(gl_GlobalInvocationID.y));
+        int yp = b.y & 1;
+        if (yp == 0) {
+            green_p1_c0(b);
+            green_p1_c1(b + ivec2(1, 0));
+        } else {
+            green_p1_c2(b);
+            green_p1_c3(b + ivec2(1, 0));
+        }
+    } else if (pc.pattern == 2u) {
+        ivec2 b = ivec2(int(gl_GlobalInvocationID.x) * 2, int(gl_GlobalInvocationID.y));
+        int yp = b.y & 1;
+        if (yp == 0) {
+            green_p2_c0(b);
+            green_p2_c1(b + ivec2(1, 0));
+        } else {
+            green_p2_c2(b);
+            green_p2_c3(b + ivec2(1, 0));
+        }
+    } else if (pc.pattern == 3u) {
+        ivec2 b = ivec2(int(gl_GlobalInvocationID.x) * 2, int(gl_GlobalInvocationID.y));
+        int yp = b.y & 1;
+        if (yp == 0) {
+            green_p3_c0(b);
+            green_p3_c1(b + ivec2(1, 0));
+        } else {
+            green_p3_c2(b);
+            green_p3_c3(b + ivec2(1, 0));
+        }
+    }
+}

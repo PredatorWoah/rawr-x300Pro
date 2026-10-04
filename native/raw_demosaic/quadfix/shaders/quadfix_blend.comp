@@ -1,0 +1,39 @@
+#version 450
+// Pass 8: remodulate + blend. correction = sum_k fac * L(resid*conj(c)) * c
+// (nearest coarse upsample == repeat), notch = resid - correction,
+// out = t*orig + (1-t)*(guide + notch).
+layout(local_size_x = QUADFIX_LOCAL_X, local_size_y = QUADFIX_LOCAL_Y, local_size_z = 1) in;
+#include "quadfix_common.glsl"
+
+// Constant-index vector component fetch (dynamic vector indexing crashes
+// some Metal translations; branches keep every access constant).
+float comp4(vec4 v, int i) {
+    if (i == 0) return v.x;
+    if (i == 1) return v.y;
+    if (i == 2) return v.z;
+    return v.w;
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    int pi, pj;
+    planeCoords(p, pi, pj);
+    int ph = ((p.y & 1) << 1) | (p.x & 1);
+    ivec2 c = ivec2(pj >> 3, pi >> 3);  // nearest coarse texel (repeat)
+    float corr = 0.0f;
+    for (int k = 0; k < QF_NCHAN; ++k) {
+        // Layer k holds channel k; RGBA holds the 4 phases (see demod).
+        vec4 v = imageLoad(coarseArr, ivec3(c, k));
+        float est = comp4(v, ph);
+        float phs = carrierPhase(QF_CQY[k], QF_CQX[k], pi, pj);
+        float car = (QF_CSIM[k] != 0) ? sin(phs) : cos(phs);
+        corr += QF_CFAC[k] * est * car;
+    }
+    float orig = bayerAt(p);
+    float guide = imageLoad(guideImg, p).r;
+    float resid = orig - guide;
+    float notch = resid - corr;
+    float t = imageLoad(energyImg, p).r;  // t_smooth after mask passes
+    bayerOut.bayer[p.y * int(pc.width) + p.x] = t * orig + (1.0f - t) * (guide + notch);
+}

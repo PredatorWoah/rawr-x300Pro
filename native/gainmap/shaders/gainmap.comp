@@ -1,0 +1,318 @@
+#version 450
+
+// UltraHDR gain map encode: HDR scene-linear + SDR sRGB -> 8-bit *single-channel*
+// recovery map (gray: R=G=B) matching the ISO 21496-1 single-channel signal
+// (flags 0x40) and single hdrgm XMP the muxer writes. One invocation per gain
+// map texel. Inputs are sampled with normalized UV (bilinear via texture() on
+// storage images is unavailable, so we do an explicit 2x2 bilinear fetch
+// with texelFetch).
+//
+// Caller guarantees GENERAL layouts. Math runs in full float precision even
+// though storage is half/byte (MoltenVK + Adreno parity requirement).
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, rgba16f) uniform readonly image2D hdrImage;
+layout(set = 0, binding = 1, rgba8) uniform readonly image2D sdrImage;
+layout(set = 0, binding = 2, rgba8) uniform writeonly image2D mapImage;
+// Sensor clip-state mask (R16UI bitmask, half res, same grid as the map: one
+// texel per 2x2 base block). Nonzero = that block clipped at the sensor, so
+// no real detail exists there and the texel renders at clipBoost instead.
+// Unbound (useClip == 0) when the caller has no mask; the load is skipped.
+layout(set = 0, binding = 3, r16ui) uniform readonly uimage2D clipImage;
+// Film glow factor (RGBA16F, full res on the HDR-tap grid): dimensionless
+// post/pre scatter quotient (~1.0 = no glow). Unbound (useGlow == 0) when
+// the caller has no glow map; the load is pinned to a 1.0 fallback texel.
+layout(set = 0, binding = 4, rgba16f) uniform readonly image2D glowImage;
+
+layout(push_constant) uniform Push {
+    uint mapWidth;
+    uint mapHeight;
+    uint hdrWidth;
+    uint hdrHeight;
+    uint sdrWidth;
+    uint sdrHeight;
+    float minLog2;
+    float maxLog2;
+    float gamma;
+    float offsetSdr;
+    float offsetHdr;
+    float hdrExposure;
+    float clipBoost;
+    uint useClip;
+    float satProtect;
+    uint multiChannel;
+    uint useGlow;
+    float glowStrength;
+    float glowMax;
+    float hdrToLinearSrgb[9];
+} pc;
+
+vec3 srgbEotf(vec3 c) {
+    vec3 lo = c / 12.92;
+    vec3 hi = pow(max((c + 0.055) / 1.055, vec3(0.0)), vec3(2.4));
+    // Strict > so c == 0.04045 takes the lo branch, matching the CPU mirrors.
+    return mix(lo, hi, vec3(greaterThan(c, vec3(0.04045))));
+}
+
+// Rec.709 luma on linear sRGB. The gain map is single-channel: the ratio of
+// luminances, re-applied per channel by the decoder. A per-channel RGB map
+// cannot be inverted by a single-channel ISO/XMP file (hue shifts), and
+// decoders (Photos, platform UltraHDR) expect gray.
+float luma709(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+// Interleaved gradient noise (Jimenez 2014): deterministic per-texel,
+// no texture needed. Used ±0.5 LSB to dither the 8-bit quantize below:
+// an 8-bit map over a ~4.7-stop range steps ~1.3%, and those steps contour
+// visibly across smooth sky gradients at HDR brightness. Sub-LSB dither
+// trades the bands for invisible noise (CPU mirrors skip it; validation
+// tolerance already covers ±1 LSB).
+float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+
+vec3 sanitize(vec3 c) {
+    // R16F HDR can carry Inf/NaN (WB gains, demosaic, highlight
+    // reconstruction). clamp(NaN)/max(NaN,0) are undefined in GLSL and would
+    // poison the whole 2x2 bilinear footprint, so drop non-finite first.
+    if (any(isnan(c)) || any(isinf(c))) return vec3(0.0);
+    return c;
+}
+
+vec3 sampleBilinearHdr(vec2 uv) {
+    vec2 st = uv * vec2(float(pc.hdrWidth), float(pc.hdrHeight)) - 0.5;
+    vec2 base = floor(st);
+    vec2 f = clamp(st - base, vec2(0.0), vec2(1.0));
+    ivec2 p00 = ivec2(int(base.x), int(base.y));
+    p00 = ivec2(clamp(p00.x, 0, int(pc.hdrWidth) - 1), clamp(p00.y, 0, int(pc.hdrHeight) - 1));
+    ivec2 p11 = ivec2(min(p00.x + 1, int(pc.hdrWidth) - 1), min(p00.y + 1, int(pc.hdrHeight) - 1));
+    vec3 c00 = imageLoad(hdrImage, ivec2(p00.x, p00.y)).rgb;
+    vec3 c10 = imageLoad(hdrImage, ivec2(p11.x, p00.y)).rgb;
+    vec3 c01 = imageLoad(hdrImage, ivec2(p00.x, p11.y)).rgb;
+    vec3 c11 = imageLoad(hdrImage, ivec2(p11.x, p11.y)).rgb;
+    vec3 top = mix(c00, c10, f.x);
+    vec3 bot = mix(c01, c11, f.x);
+    return mix(top, bot, f.y);
+}
+
+vec3 sampleBilinearSdr(vec2 uv) {
+    vec2 st = uv * vec2(float(pc.sdrWidth), float(pc.sdrHeight)) - 0.5;
+    vec2 base = floor(st);
+    vec2 f = clamp(st - base, vec2(0.0), vec2(1.0));
+    ivec2 p00 = ivec2(int(base.x), int(base.y));
+    p00 = ivec2(clamp(p00.x, 0, int(pc.sdrWidth) - 1), clamp(p00.y, 0, int(pc.sdrHeight) - 1));
+    ivec2 p11 = ivec2(min(p00.x + 1, int(pc.sdrWidth) - 1), min(p00.y + 1, int(pc.sdrHeight) - 1));
+    vec3 c00 = imageLoad(sdrImage, ivec2(p00.x, p00.y)).rgb;
+    vec3 c10 = imageLoad(sdrImage, ivec2(p11.x, p00.y)).rgb;
+    vec3 c01 = imageLoad(sdrImage, ivec2(p00.x, p11.y)).rgb;
+    vec3 c11 = imageLoad(sdrImage, ivec2(p11.x, p11.y)).rgb;
+    vec3 top = mix(c00, c10, f.x);
+    vec3 bot = mix(c01, c11, f.x);
+    return mix(top, bot, f.y);
+}
+
+// Film glow factor sampled on the HDR-tap grid (contract: same dims as the
+// HDR input). Data-flow select, not control flow (Adreno-safe, like the
+// clip path): with no glow map the loads pin to the 1.0 fallback texel.
+vec3 sampleBilinearGlow(vec2 uv) {
+    vec2 st = uv * vec2(float(pc.hdrWidth), float(pc.hdrHeight)) - 0.5;
+    vec2 base = floor(st);
+    vec2 f = clamp(st - base, vec2(0.0), vec2(1.0));
+    ivec2 p00 = ivec2(int(base.x), int(base.y));
+    p00 = ivec2(clamp(p00.x, 0, int(pc.hdrWidth) - 1), clamp(p00.y, 0, int(pc.hdrHeight) - 1));
+    ivec2 p11 = ivec2(min(p00.x + 1, int(pc.hdrWidth) - 1), min(p00.y + 1, int(pc.hdrHeight) - 1));
+    p00 = (pc.useGlow != 0u) ? p00 : ivec2(0, 0);
+    p11 = (pc.useGlow != 0u) ? p11 : ivec2(0, 0);
+    vec3 c00 = imageLoad(glowImage, ivec2(p00.x, p00.y)).rgb;
+    vec3 c10 = imageLoad(glowImage, ivec2(p11.x, p00.y)).rgb;
+    vec3 c01 = imageLoad(glowImage, ivec2(p00.x, p11.y)).rgb;
+    vec3 c11 = imageLoad(glowImage, ivec2(p11.x, p11.y)).rgb;
+    vec3 top = mix(c00, c10, f.x);
+    vec3 bot = mix(c01, c11, f.x);
+    return mix(top, bot, f.y);
+}
+
+void main() {
+    uvec3 gid = gl_GlobalInvocationID;
+    if (gid.x >= pc.mapWidth || gid.y >= pc.mapHeight) return;
+
+    vec2 uv = (vec2(float(gid.x), float(gid.y)) + 0.5) / vec2(float(pc.mapWidth), float(pc.mapHeight));
+
+    vec3 hdrWork = sanitize(sampleBilinearHdr(uv));
+    vec3 sdrEnc = sanitize(sampleBilinearSdr(uv));
+
+    // Local-detail (flatness) probe for the specular-boost gate below.
+    // Per-channel spatial spread over this texel's OWN 2x2 base block (the
+    // map is exactly half res, so the block is the texel's footprint):
+    // relative range per channel, maxed across channels. A truly
+    // sensor-pinned block is flat in every channel (zero spread): no detail
+    // exists, so dazzle is the only option. Highlight-recovered blocks
+    // carry gradients and keep their smooth measured ratio instead of being
+    // flattened. Boundary blocks straddling a clip edge always show spread,
+    // so rims melt into the ratio by construction. Spread is measured PER
+    // channel, never across channels: white-balance gains spread channels
+    // apart everywhere (a white-hot block reads e.g. 2.3/1.0/1.7), which
+    // must not count as detail. <1% spread: pinned; >8%: real detail.
+    // (Calibrated on replay dumps: recovery leaves 0% of masked blocks
+    // pinned, ceiling clip leaves ~21% pinned.)
+    int bx0 = int(gid.x) * 2;
+    int by0 = int(gid.y) * 2;
+    int bx1 = min(bx0 + 1, int(pc.hdrWidth) - 1);
+    int by1 = min(by0 + 1, int(pc.hdrHeight) - 1);
+    vec3 fbt0 = sanitize(imageLoad(hdrImage, ivec2(bx0, by0)).rgb);
+    vec3 fbt1 = sanitize(imageLoad(hdrImage, ivec2(bx1, by0)).rgb);
+    vec3 fbt2 = sanitize(imageLoad(hdrImage, ivec2(bx0, by1)).rgb);
+    vec3 fbt3 = sanitize(imageLoad(hdrImage, ivec2(bx1, by1)).rgb);
+    vec3 bmn = min(min(fbt0, fbt1), min(fbt2, fbt3));
+    vec3 bmx = max(max(fbt0, fbt1), max(fbt2, fbt3));
+    vec3 brel = (bmx - bmn) / max(bmx, vec3(1e-3));
+    float pinFlat = 1.0 - smoothstep(0.01, 0.08, max(brel.x, max(brel.y, brel.z)));
+
+    // Scene-exposure match: the SDR base contains the capture exposure gain
+    // (tonemap renderExposureEV / film folded EV) but the HDR tap is
+    // pre-exposure sensor linear. Without this, highlights clipped at 1.0 in
+    // both domains ratio to ~1x and the map goes flat where it matters most.
+    hdrWork *= max(pc.hdrExposure, 1e-6);
+
+    // Film glow factor (agnostic post/pre scatter quotient, ~1.0 = no glow):
+    // film response and exposure cancel in the ratio, so no per-stock scale
+    // is needed. Applied pre-CST on camera RGB; the residual axis mismatch
+    // rides on (G-1), bounded by glowMax. G=1 never dims the core, so peak
+    // headroom survives; the clamp keeps dark-neighbor bleed (halation onto
+    // dark rocks) bounded; strength scales the effect (0 = pure scene tap).
+    // Per-channel so halo warmth survives approximately (luma would discard
+    // it); the white-tap luma fallback below still guards hue-less cores.
+    vec3 glowG = max(sanitize(sampleBilinearGlow(uv)), vec3(0.0));
+    float glowOn = (pc.useGlow != 0u) ? clamp(pc.glowStrength, 0.0, 1.0) : 0.0;
+    vec3 glowT = min(max(glowG, vec3(1.0)), vec3(max(pc.glowMax, 1.0)));
+    hdrWork *= mix(vec3(1.0), glowT, glowOn);
+
+    // HDR working (camera RGB; caller supplies the calibrated
+    // camera->linear-sRGB matrix) -> linear sRGB (row-major 3x3 push const).
+    vec3 hdrLin = vec3(
+        pc.hdrToLinearSrgb[0] * hdrWork.x + pc.hdrToLinearSrgb[1] * hdrWork.y + pc.hdrToLinearSrgb[2] * hdrWork.z,
+        pc.hdrToLinearSrgb[3] * hdrWork.x + pc.hdrToLinearSrgb[4] * hdrWork.y + pc.hdrToLinearSrgb[5] * hdrWork.z,
+        pc.hdrToLinearSrgb[6] * hdrWork.x + pc.hdrToLinearSrgb[7] * hdrWork.y + pc.hdrToLinearSrgb[8] * hdrWork.z);
+    hdrLin = max(hdrLin, vec3(0.0));
+
+    vec3 sdrLin = max(srgbEotf(clamp(sdrEnc, vec3(0.0), vec3(1.0))), vec3(0.0));
+
+    // Gain: single-channel luminance ratio (default) or per-channel RGB
+    // ratios (multiChannel). Offsets are clamped defensively even though
+    // validateParams() now requires them > 0: with offsetSdr == 0 a black
+    // SDR texel would produce Inf/NaN and poison the file. Per-channel mode
+    // extrapolates the spec formulas per channel (Android Ultra HDR v1.1):
+    // the file then reconstructs each channel's own headroom, preserving
+    // hue through a white SDR base (warm lamp stays yellow). Metadata stays
+    // channel-identical, so XMP/readers that assume single-channel keep
+    // parsing (they apply channel 0); ISO-flag-aware decoders (Photos)
+    // apply all three.
+    // Chroma protection: the single-channel decoder multiplies every channel
+    // by one gain, so a large gain on a saturated color pushes all channels
+    // into panel clip (warm lamp renders white). Attenuate where the SDR
+    // base is bright AND saturated so colored lights stay colored; neutral
+    // highlights (sat ~0) keep full pop. satProtect 0 = off. (In
+    // multi-channel mode the hue survives by construction; the term still
+    // guards absolute panel clip.)
+    float sdrMaxChan = max(sdrLin.x, max(sdrLin.y, sdrLin.z));
+    float sdrMinChan = min(sdrLin.x, min(sdrLin.y, sdrLin.z));
+    float sdrSat = (sdrMaxChan - sdrMinChan) / max(sdrMaxChan, 1e-3);
+    float satW = pc.satProtect * smoothstep(0.5, 0.9, sdrMaxChan) * clamp(sdrSat, 0.0, 1.0);
+    vec3 logGain3 =
+        log2(max((hdrLin + max(pc.offsetHdr, 1e-6)) / (sdrLin + max(pc.offsetSdr, 1e-6)), vec3(1e-9)));
+    float logGainLuma = log2(max((luma709(hdrLin) + max(pc.offsetHdr, 1e-6)) /
+                                     (luma709(sdrLin) + max(pc.offsetSdr, 1e-6)),
+                                 1e-9));
+    // Shadow fade: quotients in deep shadows encode the tone-curve toe and
+    // local-tonemap darkening, not real headroom. Fade the boost in with SDR
+    // brightness so shadows stay identity, midtones keep partial gain and
+    // highlights get full gain. Luma-driven in both modes.
+    float toneScale = smoothstep(0.03, 0.50, luma709(sdrLin)) * (1.0 - satW);
+    // Specular boost: sensor-clipped blocks carry no detail (the HDR tap is
+    // pinned at sensor white), so the ratio above can only ever reach the
+    // capture exposure there. Render them at clipBoost instead: dazzling on
+    // HDR displays, exactly the base SDR elsewhere.
+    // Coverage comes STRICTLY from the clip mask (bitCount(state & 0xF)/4
+    // over the R,G1,G2,B clip bits, feathered by the 7x7 average below),
+    // AND from local flatness (see the probe above): masked texels whose
+    // HDR tap still carries a gradient (highlight recovery reconstructed
+    // real detail there) keep the ratio. There is deliberately no tap-based
+    // detection: any bright diffuse tap (white wall, ceiling, lampshade at
+    // tap ~1.0) would false-fire a pre-exposure brightness band and render
+    // large diffuse areas at flat clipBoost with a hard shoulder instead of
+    // their smooth measured ratio. Unmasked brights stay on the ratio path,
+    // which already carries the real headroom (tap x exposure vs
+    // compressed SDR).
+    // Coverage is channel-weighted AND feathered: each mask texel contributes
+    // bitCount(state & 0xF)/4 over the R,G1,G2,B clip bits. The center texel
+    // takes max() with the 7x7 average: a clipped center always drives its
+    // own fate (small sun glints must dazzle, not dilute into invisibility),
+    // while the neighborhood average feathers the shoulder over ~7 texels
+    // (~14 base pixels) so a boost core melts into its surroundings instead
+    // of punching a hard-edged white hole. Partially clipped blocks keep
+    // mostly the measured ratio so their chroma survives instead of blowing
+    // white; clear blocks keep the ratio exactly.
+    // Finally the boost is gated on SDR brightness: it only fades in where
+    // the base itself is near-saturated (linear luma 0.85-0.98). Near-white
+    // SDR that still holds gradation (bright sky, sunlit walls) keeps the
+    // measured ratio - which already carries the real headroom there - so
+    // visible detail is never flattened to uniform boost white.
+    // NOTE: straight-line selects, not a control-flow branch around the
+    // imageLoad: Adreno rejects vkCreateComputePipelines (UNKNOWN) for the
+    // branched form. When useClip is off, binding 3 holds a 1x1 all-clear
+    // image and the loads are pinned to (0,0), so they stay in bounds.
+    uint clipBits = 0u;
+    uint clipCenter = 0u;
+    for (int dy = -3; dy <= 3; ++dy)
+        for (int dx = -3; dx <= 3; ++dx) {
+            ivec2 cxy = ivec2(int(gid.x), int(gid.y)) + ivec2(dx, dy);
+            // Data-flow select, not control flow (see NOTE above).
+            cxy = (pc.useClip != 0u) ? cxy : ivec2(0, 0);
+            cxy = ivec2(clamp(cxy.x, 0, int(pc.mapWidth) - 1), clamp(cxy.y, 0, int(pc.mapHeight) - 1));
+            uint bits = bitCount(imageLoad(clipImage, cxy).r & 15u);
+            clipBits += bits;
+            if (dx == 0 && dy == 0) clipCenter = bits;
+        }
+    float cover = (pc.clipBoost > 0.0) ? max(float(clipBits) / 196.0, float(clipCenter) / 4.0) : 0.0;
+    // Gate on max CHANNEL, not luminance: saturated primaries (blue lamp,
+    // red neon) hit 1.0 in one channel while their luma sits at 0.07-0.21,
+    // so a luma gate would exclude every colored specular forever. Detail
+    // protection still holds: textured near-whites keep the ratio unless the
+    // mask also fires.
+    cover *= smoothstep(0.85, 0.98, sdrMaxChan);
+    // Detail gate: the boost weight is killed where the HDR tap carries real
+    // local spread (highlight-recovered gradients). Only truly flat-pinned
+    // masked cores render at clipBoost; everything else keeps its smooth
+    // measured ratio, so recovered highlights roll off naturally instead of
+    // being flattened into a hard-edged disc. The chroma term keeps the
+    // boost from white-washing saturated pins (their chroma survives).
+    float boostW = cover * pinFlat * (1.0 - satW);
+    // Clipped-core hue fallback: highlight recovery's full-core path emits
+    // neutral white (no surviving channel), so the HDR numerator is hue-less
+    // while the SDR base still carries color (tonemap curve / film warmth).
+    // Multi-channel would then faithfully reconstruct white and discard the
+    // SDR hue. Where the HDR tap is white (low saturation, high luma), fall
+    // back to the luma gain so the decoded HDR keeps the SDR hue, brighter.
+    // Tap-only signal (no mask): genuinely white diffuse is neutral in both
+    // taps, so luma vs per-channel coincide there and the fallback is harmless.
+    // Halo/rock texels keep multi-channel (tap carries real hue/gradient).
+    float hdrMaxChan = max(hdrLin.x, max(hdrLin.y, hdrLin.z));
+    float hdrMinChan = min(hdrLin.x, min(hdrLin.y, hdrLin.z));
+    float hdrSat = (hdrMaxChan - hdrMinChan) / max(hdrMaxChan, 1e-3);
+    float hdrWhiteW = (1.0 - smoothstep(0.05, 0.15, hdrSat)) * smoothstep(0.5, 0.9, luma709(hdrLin));
+    // Per-channel path mixes each channel toward the boost level with the
+    // same scalar weight; single-channel path mixes the luma value. The
+    // final select is arithmetic (Adreno-safe), then one shared
+    // normalize/gamma/dither/quantize tail so both modes quantize alike.
+    // In multi-channel mode the white-tap weight above reroutes hue-less
+    // cores to luma (SDR hue preserved); single-channel mode is luma always.
+    float mcOn = float(pc.multiChannel != 0u);
+    float useLuma = max(1.0 - mcOn, hdrWhiteW * mcOn);
+    vec3 logFinal =
+        mix(logGain3 * toneScale, vec3(logGainLuma * toneScale), useLuma);
+    logFinal = mix(logFinal, vec3(log2(max(pc.clipBoost, 1e-9))), boostW);
+    vec3 norm3 = clamp((logFinal - pc.minLog2) / max(pc.maxLog2 - pc.minLog2, 1e-6), 0.0, 1.0);
+    vec3 recovery3 = pow(norm3, vec3(pc.gamma));
+    vec3 dithered3 = recovery3 + vec3((ign(vec2(float(gid.x), float(gid.y))) - 0.5) / 255.0);
+    vec3 stored3 = clamp(floor(dithered3 * 255.0 + 0.5) / 255.0, 0.0, 1.0);
+
+    imageStore(mapImage, ivec2(int(gid.x), int(gid.y)), vec4(stored3, 1.0));
+}

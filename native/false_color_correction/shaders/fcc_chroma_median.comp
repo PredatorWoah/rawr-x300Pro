@@ -1,0 +1,101 @@
+#version 450
+// RawTherapee false-color correction: strong median stage on YIQ chroma.
+// Pinned semantic source:
+// RawTherapee 498f623784e33fd9a7077fcd8937fe0734033366
+// rtengine/rawimagesource.cc processFalseColorCorrectionThread()
+// rtengine/rawimagesource_i.h convert_row_to_YIQ()
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(binding = 0, rgba16f) uniform readonly image2D srcRgb;
+layout(binding = 1, rg32f) uniform writeonly image2D outIq;
+layout(push_constant) uniform Push {
+    uint width;
+    uint height;
+    uint normalizedChroma;
+    float edgeSigma;
+    float chromaBound;
+}
+pc;
+
+vec2 toIQ(vec3 c) { return vec2(0.596 * c.r - 0.275 * c.g - 0.321 * c.b, 0.212 * c.r - 0.523 * c.g + 0.311 * c.b); }
+vec2 iqAt(int x, int y) {
+    vec3 rgb = imageLoad(srcRgb, ivec2(x, y)).rgb;
+    vec2 iq = toIQ(rgb);
+    if (pc.normalizedChroma != 0u) iq /= max(dot(rgb, vec3(0.299, 0.587, 0.114)), 1e-4);
+    return iq;
+}
+
+// Component-wise compare/swap because RawTherapee's SIMD path processes I and Q lanes independently.
+void cswap(inout vec2 a, inout vec2 b) {
+    vec2 lo = min(a, b), hi = max(a, b);
+    a = lo;
+    b = hi;
+}
+void middle4of6(vec2 a0, vec2 a1, vec2 a2, vec2 a3, vec2 a4, vec2 a5, out vec2 r0, out vec2 r1, out vec2 r2,
+                out vec2 r3) {
+    // Exact algebra of pinned RawTherapee median.h::middle4of6(), component-wise.
+    r0 = min(a1, a2);
+    r1 = max(a1, a2);
+    vec2 left = min(a0, r1);
+    r1 = max(a0, r1);
+    vec2 tmp = min(left, r0);
+    r0 = max(left, r0);
+    left = tmp;
+    r3 = min(a4, a5);
+    vec2 right = max(a4, a5);
+    r2 = min(a3, right);
+    right = max(a3, right);
+    tmp = min(r2, r3);
+    r3 = max(r2, r3);
+    r2 = max(left, tmp);
+    r1 = min(r1, right);
+}
+vec2 median7(vec2 a, vec2 b, vec2 c, vec2 d, vec2 e, vec2 f, vec2 g) {
+    // Small fixed sorting network; returns 4th order statistic per component.
+    vec2 v0 = a, v1 = b, v2 = c, v3 = d, v4 = e, v5 = f, v6 = g;
+    cswap(v0, v5);
+    cswap(v0, v3);
+    cswap(v1, v6);
+    cswap(v2, v4);
+    cswap(v0, v1);
+    cswap(v3, v5);
+    cswap(v2, v6);
+    cswap(v2, v3);
+    cswap(v3, v6);
+    cswap(v4, v5);
+    cswap(v1, v4);
+    cswap(v1, v3);
+    cswap(v3, v4);
+    return v3;
+}
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (uint(p.x) >= pc.width || uint(p.y) >= pc.height) return;
+    int W = int(pc.width), H = int(pc.height);
+    int x = p.x, y = p.y;
+    // RawTherapee leaves top/bottom rows and first / final two columns un-medianed.
+    if (y == 0 || y == H - 1 || x == 0 || x >= W - 2) {
+        imageStore(outIq, p, vec4(iqAt(x, y), 0, 0));
+        return;
+    }
+    vec2 upL, midL, downL, upC, midC, downC, upR, midR, downR;
+    upL = iqAt(x - 1, y - 1);
+    midL = iqAt(x - 1, y);
+    downL = iqAt(x - 1, y + 1);
+    upC = iqAt(x, y - 1);
+    midC = iqAt(x, y);
+    downC = iqAt(x, y + 1);
+    upR = iqAt(x + 1, y - 1);
+    midR = iqAt(x + 1, y);
+    downR = iqAt(x + 1, y + 1);
+    vec2 m0, m1, m2, m3;
+    if ((x & 1) == 1) {
+        // j odd in the scalar RawTherapee loop:
+        // median(pre1 vertical triplet, middle4of6(pre2,post1)).
+        middle4of6(upC, midC, downC, upR, midR, downR, m0, m1, m2, m3);
+        imageStore(outIq, p, vec4(median7(upL, midL, downL, m0, m1, m2, m3), 0, 0));
+    } else {
+        // j+1 even: median(post2 vertical triplet, same middle4of6(pre2,post1)).
+        middle4of6(upL, midL, downL, upC, midC, downC, m0, m1, m2, m3);
+        imageStore(outIq, p, vec4(median7(upR, midR, downR, m0, m1, m2, m3), 0, 0));
+    }
+}

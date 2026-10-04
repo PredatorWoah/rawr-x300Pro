@@ -1,0 +1,52 @@
+#version 450
+
+// Glow-factor export for the film+UltraHDR gain-map tap: per-pixel
+// post/pre scatter quotient (dimensionless). Both buffers hold film-linear
+// raw (spectral response x scene x folded exposure), so the stock-dependent
+// response and the exposure cancel in the ratio: G ~= 1.0 + glow, with no
+// per-stock scale to calibrate. G < 1 (scatter darkening of a bright core)
+// is preserved here; the gainmap clamps to >= 1 so cores never dim.
+// NaN/Inf-safe; loose upper clamp guards degenerate pre ~= 0 (deep
+// shadows: the gainmap shadow fade kills gains there regardless).
+layout(local_size_x = 32, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer PrePixels {
+  vec4 pre[];
+};
+
+layout(std430, binding = 1) readonly buffer PostPixels {
+  vec4 post[];
+};
+
+layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D dstImage;
+
+layout(push_constant) uniform RatioParams {
+  uint width;     // source-buffer row stride
+  uint height;    // source-buffer extent
+  uint sourceX;
+  uint sourceY;
+  uint outputX;
+  uint outputY;
+  uint regionW;
+  uint regionH;
+} params;
+
+void main() {
+  const uvec2 gid = gl_GlobalInvocationID.xy;
+  if (gid.x >= params.regionW || gid.y >= params.regionH) {
+    return;
+  }
+  const uint index = (params.sourceY + gid.y) * params.width +
+                     params.sourceX + gid.x;
+  const vec4 a = pre[index];
+  const vec4 b = post[index];
+  vec3 g = vec3(1.0);
+  for (int c = 0; c < 3; ++c) {
+    const float x = a[c];
+    const float y = b[c];
+    const bool ok = !isnan(x) && !isinf(x) && !isnan(y) && !isinf(y) && x > 1e-6;
+    g[c] = ok ? clamp(y / x, 0.0, 8.0) : 1.0;
+  }
+  imageStore(dstImage, ivec2(gid + uvec2(params.outputX, params.outputY)),
+             vec4(g, 1.0));
+}

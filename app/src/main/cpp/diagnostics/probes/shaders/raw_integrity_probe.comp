@@ -1,0 +1,69 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, r16ui) uniform readonly uimage2D rawImage;
+layout(set = 0, binding = 1, rgba16f) uniform readonly image2D linearImage;
+layout(set = 0, binding = 2, rgba8) uniform readonly image2D displayImage;
+layout(set = 0, binding = 3, r16ui) uniform readonly uimage2D referenceRawImage;
+layout(std430, set = 0, binding = 4) buffer ProbeOutput { uint words[]; }
+probe;
+
+layout(push_constant) uniform ProbePush {
+    uint rawWidth;
+    uint rawHeight;
+    uint outputWidth;
+    uint outputHeight;
+}
+pc;
+
+const uint DENSE = 64u;
+const uint DENSE_WORDS = DENSE * DENSE * 9u;
+const uint BOTTOM_W = 32u;
+const uint BOTTOM_H = 32u;
+
+void main() {
+    uint gx = gl_GlobalInvocationID.x;
+    uint gy = gl_GlobalInvocationID.y;
+    if (gx >= DENSE || gy >= DENSE) return;
+
+    // Dense same-CFA-parity window around sensor center. Two-pixel spacing keeps
+    // Bayer colour fixed while still exposing short-period row/column corruption.
+    uint centerX = (pc.rawWidth / 2u) & ~1u;
+    uint centerY = (pc.rawHeight / 2u) & ~1u;
+    uint startX = centerX >= DENSE ? centerX - DENSE : 0u;
+    uint startY = centerY >= DENSE ? centerY - DENSE : 0u;
+    startX &= ~1u;
+    startY &= ~1u;
+    uint rx = min(startX + gx * 2u, pc.rawWidth - 1u);
+    uint ry = min(startY + gy * 2u, pc.rawHeight - 1u);
+    uint ox = min(rx / 2u, pc.outputWidth - 1u);
+    uint oy = min(ry / 2u, pc.outputHeight - 1u);
+
+    uint raw = imageLoad(rawImage, ivec2(int(rx), int(ry))).r;
+    uint referenceRaw = imageLoad(referenceRawImage, ivec2(int(rx), int(ry))).r;
+    vec3 linear = imageLoad(linearImage, ivec2(int(ox), int(oy))).rgb;
+    vec3 display = imageLoad(displayImage, ivec2(int(ox), int(oy))).rgb;
+
+    uint base = (gy * DENSE + gx) * 9u;
+    probe.words[base + 0u] = raw;
+    probe.words[base + 1u] = floatBitsToUint(linear.r);
+    probe.words[base + 2u] = floatBitsToUint(linear.g);
+    probe.words[base + 3u] = floatBitsToUint(linear.b);
+    probe.words[base + 4u] = floatBitsToUint(display.r);
+    probe.words[base + 5u] = floatBitsToUint(display.g);
+    probe.words[base + 6u] = floatBitsToUint(display.b);
+    probe.words[base + 7u] = (ry << 16u) | (rx & 0xffffu);
+    probe.words[base + 8u] = referenceRaw;
+
+    // Independently characterize every one of the final 32 RAW rows at 32
+    // distributed columns. Unlike the dense probe, this intentionally mixes CFA
+    // x/y parities so hidden/invalid edge rows cannot be mistaken for one colour.
+    if (gx < BOTTOM_W && gy < BOTTOM_H) {
+        uint bx = (gx * (pc.rawWidth - 1u)) / (BOTTOM_W - 1u);
+        uint by = pc.rawHeight - BOTTOM_H + gy;
+        uint bottomBase = DENSE_WORDS + (gy * BOTTOM_W + gx) * 3u;
+        probe.words[bottomBase + 0u] = imageLoad(rawImage, ivec2(int(bx), int(by))).r;
+        probe.words[bottomBase + 1u] = (by << 16u) | (bx & 0xffffu);
+        probe.words[bottomBase + 2u] = imageLoad(referenceRawImage, ivec2(int(bx), int(by))).r;
+    }
+}

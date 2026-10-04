@@ -1,0 +1,133 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+#include "vng4_common.glsl"
+layout(std430, set = 0, binding = 7) buffer Diagnostic { uint u[]; }
+diagnostic;
+void putf(int i, float v) { diagnostic.u[i] = floatBitsToUint(v); }
+void main() {
+    ivec2 p = ivec2(int(diagnostic.u[0]), int(diagnostic.u[1]));
+    int centerColor = vngColorAt(p);
+    float gval[8] = float[8](0, 0, 0, 0, 0, 0, 0, 0);
+    for (int t = 0; t < 64; ++t) {
+        putf(19 + t, uintBitsToFloat(0x7fc00000u));
+        putf(83 + t, 0.0);
+        putf(147 + t, uintBitsToFloat(0x7fc00000u));
+        putf(211 + t, uintBitsToFloat(0x7fc00000u));
+    }
+    for (int t = 0; t < 64; ++t) {
+        int k = t * 6;
+        ivec2 a = ivec2(VNG_TERMS[k + 1], VNG_TERMS[k]);
+        ivec2 b = ivec2(VNG_TERMS[k + 3], VNG_TERMS[k + 2]);
+        int weight = VNG_TERMS[k + 4], mask = VNG_TERMS[k + 5], c = vngColorAt(p + a);
+        if (vngColorAt(p + b) != c) {
+            putf(83 + t, gval[3]);
+            continue;
+        }
+        int dg = (vngColorAt(p + ivec2(1, 0)) == c && vngColorAt(p + ivec2(0, 1)) == c) ? 2 : 1;
+        if (abs(a.y - b.y) == dg && abs(a.x - b.x) == dg) {
+            putf(83 + t, gval[3]);
+            continue;
+        }
+        precise float va = working4(p + a)[c];
+        precise float vb = working4(p + b)[c];
+        putf(147 + t, va);
+        putf(211 + t, vb);
+        precise float d = abs(va - vb) * float(1 << weight);
+        putf(19 + t, d);
+        for (int g = 0; g < 8; ++g)
+            if ((mask & (1 << g)) != 0) {
+                precise float next = gval[g] + d;
+                gval[g] = next;
+            }
+        putf(83 + t, gval[3]);
+    }
+
+    for (int oy = -2; oy <= 2; ++oy)
+        for (int ox = -2; ox <= 2; ++ox) {
+            vec4 z = working4(p + ivec2(ox, oy));
+            int base = 275 + (((oy + 2) * 5 + (ox + 2)) * 4);
+            for (int c = 0; c < 4; ++c) putf(base + c, z[c]);
+        }
+
+    for (int oy = -2; oy <= 2; ++oy)
+        for (int ox = -2; ox <= 2; ++ox) {
+            ivec2 q = p + ivec2(ox, oy);
+            int ownq = vngColorAt(q);
+            for (int c = 0; c < 4; ++c) {
+                precise float sm = 0.0;
+                precise float dn = 0.0;
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        if (dx == 0 && dy == 0) continue;
+                        ivec2 r = q + ivec2(dx, dy);
+                        int rc = vngColorAt(r);
+                        float ww = ((dy == 0) ? 1.0 : 0.0) + ((dx == 0) ? 1.0 : 0.0);
+                        ww = exp2(ww);
+                        if (rc == c) {
+                            precise float pr = cfa(r) * ww;
+                            precise float ns = sm + pr;
+                            sm = ns;
+                            dn += ww;
+                        }
+                    }
+                precise float direct = (c == ownq) ? cfa(q) : sm / dn;
+                precise float rr = 1.0 / dn;
+                precise float mul = (c == ownq) ? cfa(q) : sm * rr;
+                int k = ((oy + 2) * 5 + (ox + 2)) * 4 + c;
+                putf(375 + k, direct);
+                putf(475 + k, mul);
+                putf(575 + k, sm);
+                putf(675 + k, dn);
+            }
+        }
+    float mn = gval[0], mx = gval[0];
+    for (int g = 1; g < 8; ++g) {
+        mn = min(mn, gval[g]);
+        mx = max(mx, gval[g]);
+    }
+    precise float halfmx = mx * 0.5;
+    precise float th = mn + halfmx;
+    float greenval = working4(p)[centerColor], sum0 = 0, sum1 = 0;
+    int num = 0;
+    uint mask = 0u;
+    if ((centerColor & 1) != 0) {
+        int other = centerColor ^ 2;
+        for (int g = 0; g < 8; ++g)
+            if (gval[g] <= th) {
+                mask |= 1u << g;
+                ivec2 d = ivec2(VNG_CHOOD[g * 2 + 1], VNG_CHOOD[g * 2]);
+                int nc = vngColorAt(p + d);
+                if (nc != centerColor && vngColorAt(p + 2 * d) == centerColor)
+                    sum0 += greenval + working4(p + 2 * d)[centerColor];
+                sum1 += working4(p + d)[other];
+                num++;
+            }
+        sum0 *= 0.5;
+    } else {
+        for (int g = 0; g < 8; ++g)
+            if (gval[g] <= th) {
+                mask |= 1u << g;
+                ivec2 d = ivec2(VNG_CHOOD[g * 2 + 1], VNG_CHOOD[g * 2]);
+                int nc = vngColorAt(p + d);
+                if (nc != centerColor && vngColorAt(p + 2 * d) == centerColor)
+                    sum0 += greenval + working4(p + 2 * d)[centerColor];
+                vec4 n = working4(p + d);
+                sum1 += n[1] + n[3];
+                num++;
+            }
+    }
+    float result = greenval + (sum1 - sum0) / (2.0 * float(num));
+    diagnostic.u[0] = 0x564E4734u;
+    diagnostic.u[1] = uint(centerColor);
+    for (int g = 0; g < 8; ++g) putf(2 + g, gval[g]);
+    putf(10, mn);
+    putf(11, mx);
+    putf(12, th);
+    diagnostic.u[13] = mask;
+    diagnostic.u[14] = uint(num);
+    putf(15, greenval);
+    putf(16, sum0);
+    putf(17, sum1);
+    putf(18, result);
+}

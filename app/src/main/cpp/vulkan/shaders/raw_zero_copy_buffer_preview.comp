@@ -1,0 +1,178 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(std430, set = 0, binding = 0) readonly buffer RawBuffer { uint packedWords[]; }
+rawBuffer;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D outImage;
+layout(push_constant) uniform PC {
+    vec4 black;
+    vec4 invRange;
+    vec4 wb;
+    float clipThreshold;
+    float edgeStrength;
+    float chromaBlend;
+    float highlightWarningThreshold;
+    float shadowWarningThreshold;
+    float pad0;
+    uint width;
+    uint height;
+    uint pattern;
+    uint pad1;
+}
+pc;
+
+struct BayerCell {
+    vec3 rgb;
+    uint validMask;
+};
+shared vec4 sCell[100];
+bool isChannelValid(BayerCell c, int ch) { return (c.validMask & (1u << uint(ch))) != 0u; }
+
+uint rawSample(ivec2 q) {
+    uint linear = uint(q.y) * pc.width + uint(q.x);
+    uint packed = rawBuffer.packedWords[linear >> 1u];
+    return ((linear & 1u) == 0u) ? (packed & 0xffffu) : (packed >> 16u);
+}
+float normalizeSensorSample(ivec2 q, int c) {
+    return clamp((float(rawSample(q)) - pc.black[c]) * pc.invRange[c], 0.0, 1.0);
+}
+
+BayerCell loadBayerCell(ivec2 cell) {
+    ivec2 os = ivec2(int(pc.width >> 1), int(pc.height >> 1));
+    cell = clamp(cell, ivec2(0), os - ivec2(1));
+    ivec2 b = cell << 1;
+    float rr, gg1, gg2, bb;
+    if (pc.pattern == 0u) {
+        rr = normalizeSensorSample(b + ivec2(0, 0), 0);
+        gg1 = normalizeSensorSample(b + ivec2(1, 0), 1);
+        gg2 = normalizeSensorSample(b + ivec2(0, 1), 2);
+        bb = normalizeSensorSample(b + ivec2(1, 1), 3);
+    } else if (pc.pattern == 1u) {
+        gg1 = normalizeSensorSample(b + ivec2(0, 0), 1);
+        rr = normalizeSensorSample(b + ivec2(1, 0), 0);
+        bb = normalizeSensorSample(b + ivec2(0, 1), 3);
+        gg2 = normalizeSensorSample(b + ivec2(1, 1), 2);
+    } else if (pc.pattern == 2u) {
+        gg2 = normalizeSensorSample(b + ivec2(0, 0), 2);
+        bb = normalizeSensorSample(b + ivec2(1, 0), 3);
+        rr = normalizeSensorSample(b + ivec2(0, 1), 0);
+        gg1 = normalizeSensorSample(b + ivec2(1, 1), 1);
+    } else {
+        bb = normalizeSensorSample(b + ivec2(0, 0), 3);
+        gg2 = normalizeSensorSample(b + ivec2(1, 0), 2);
+        gg1 = normalizeSensorSample(b + ivec2(0, 1), 1);
+        rr = normalizeSensorSample(b + ivec2(1, 1), 0);
+    }
+    bool vr = rr < pc.clipThreshold, v1 = gg1 < pc.clipThreshold, v2 = gg2 < pc.clipThreshold,
+         vb = bb < pc.clipThreshold;
+    // Keep the diagnostic buffer path on the same post-formation contract as
+    // production preview: ordinary G1/G2 averaging, then highlight handling.
+    float g = 0.5 * (gg1 + gg2);
+    uint mask = (vr ? 1u : 0u) | ((v1 || v2) ? 2u : 0u) | (vb ? 4u : 0u);
+    uint clipState = (!vr ? 1u : 0u) | (!v1 ? 2u : 0u) | (!v2 ? 4u : 0u) | (!vb ? 8u : 0u);
+    return BayerCell(vec3(rr, g, bb), mask | (clipState << 3));
+}
+
+BayerCell loadTileCell(ivec2 d) {
+    ivec2 p = ivec2(gl_LocalInvocationID.xy) + ivec2(1) + d;
+    vec4 q = sCell[p.y * 10 + p.x];
+    return BayerCell(q.rgb, uint(q.a + 0.5));
+}
+
+float edgeWeight(float a, float b) { return 1.0 / (1.0 + pc.edgeStrength * abs(a - b)); }
+
+vec3 clipStateRgb(uint state) {
+    return vec3((state & 1u) != 0u ? 1.0 : 0.0,
+                0.5 * float(((state & 2u) != 0u ? 1u : 0u) + ((state & 4u) != 0u ? 1u : 0u)),
+                (state & 8u) != 0u ? 1.0 : 0.0);
+}
+
+
+#include "raw_highlight_post_rgb.glsl"
+
+vec4 previewHighlightColorGuide(ivec2 p, vec3 center, vec3 centerClipped, vec3 channelCeilings) {
+    const ivec2 directions[4] = ivec2[4](ivec2(-1, 0), ivec2(1, 0), ivec2(0, -1), ivec2(0, 1));
+    const int radii[8] = int[8](1, 2, 4, 8, 16, 32, 64, 128);
+    ivec2 extent = ivec2(int(pc.width >> 1), int(pc.height >> 1));
+    vec3 reliability = clamp(vec3(1.0) - centerClipped, vec3(0.0), vec3(1.0));
+    vec3 centerKnown = center * reliability;
+    float centerKnownSum = max(rawrHighlightSum(centerKnown), 1e-6);
+    centerKnown /= centerKnownSum;
+    vec3 accumulated = vec3(0.0);
+    float accumulatedWeight = 0.0;
+    float gwb = 0.5 * (pc.wb.y + pc.wb.z);
+    for (int direction = 0; direction < 4; ++direction) {
+        for (int radiusIndex = 0; radiusIndex < 8; ++radiusIndex) {
+            int radius = radii[radiusIndex];
+            ivec2 q = p + directions[direction] * radius;
+            if (any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, extent))) continue;
+            BayerCell sampleCell = loadBayerCell(q);
+            vec3 sampleClipped = clipStateRgb(sampleCell.validMask >> 3);
+            if (rawrHighlightMaximum(sampleClipped) > 1e-6) continue;
+            vec3 sampleRgb = rawrHighlightSanitize(sampleCell.rgb * vec3(pc.wb.x, gwb, pc.wb.w));
+            float normalizedPeak = rawrHighlightMaximum(sampleRgb / max(channelCeilings, vec3(1e-4)));
+            if (normalizedPeak < 0.20 || normalizedPeak > 1.10) continue;
+            float sampleSum = rawrHighlightSum(sampleRgb);
+            if (sampleSum <= 1e-6) continue;
+            vec3 chroma = sampleRgb / sampleSum;
+            vec3 sampleKnown = sampleRgb * reliability;
+            float sampleKnownSum = max(rawrHighlightSum(sampleKnown), 1e-6);
+            sampleKnown /= sampleKnownSum;
+            float hueError = dot(centerKnown - sampleKnown, centerKnown - sampleKnown);
+            float levelError = abs(log2(max(centerKnownSum, 1e-6) / max(sampleKnownSum, 1e-6)));
+            float weight = 1.0 / ((1.0 + 0.04 * float(radius)) * (1.0 + 32.0 * hueError + 0.35 * levelError));
+            accumulated += chroma * weight;
+            accumulatedWeight += weight;
+            break;
+        }
+    }
+    return accumulatedWeight > 1e-6 ? vec4(accumulated / accumulatedWeight, 1.0) : vec4(0.0);
+}
+
+void main() {
+    uint lid = gl_LocalInvocationIndex;
+    ivec2 groupOrigin = ivec2(gl_WorkGroupID.xy) * 8 - ivec2(1);
+    for (uint i = lid; i < 100u; i += 64u) {
+        ivec2 t = ivec2(int(i % 10u), int(i / 10u));
+        BayerCell c = loadBayerCell(groupOrigin + t);
+        sCell[i] = vec4(c.rgb, float(c.validMask));
+    }
+    barrier();
+
+    ivec2 o = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 os = ivec2(int(pc.width >> 1), int(pc.height >> 1));
+    if (any(greaterThanEqual(o, os))) return;
+    BayerCell rawCenter = loadTileCell(ivec2(0));
+    uint centerClipState = rawCenter.validMask >> 3;
+    uint originalMask = rawCenter.validMask & 7u;
+    rawCenter.validMask = originalMask;
+    BayerCell c = rawCenter;
+
+    float rg0 = c.rgb.r - c.rgb.g, bg0 = c.rgb.b - c.rgb.g;
+    float rg = rg0, bg = bg0;
+    if (originalMask == 7u && pc.chromaBlend > 0.0) {
+        float rgSum = 0.0, rgW = 0.0, bgSum = 0.0, bgW = 0.0;
+        const ivec2 dirs[4] = ivec2[4](ivec2(0, -1), ivec2(-1, 0), ivec2(1, 0), ivec2(0, 1));
+        for (int i = 0; i < 4; i++) {
+            BayerCell n = loadTileCell(dirs[i]);
+            float w = edgeWeight(c.rgb.g, n.rgb.g);
+            if (isChannelValid(n, 0) && isChannelValid(n, 1)) {
+                rgSum += w * (n.rgb.r - n.rgb.g);
+                rgW += w;
+            }
+            if (isChannelValid(n, 2) && isChannelValid(n, 1)) {
+                bgSum += w * (n.rgb.b - n.rgb.g);
+                bgW += w;
+            }
+        }
+        if (rgW > 1e-6) rg = mix(rg0, rgSum / rgW, pc.chromaBlend);
+        if (bgW > 1e-6) bg = mix(bg0, bgSum / bgW, pc.chromaBlend);
+    }
+    vec3 sensor = max(vec3(c.rgb.g + rg, c.rgb.g, c.rgb.g + bg), vec3(0.0));
+    float gwb = 0.5 * (pc.wb.y + pc.wb.z);
+    vec3 rgb = sensor * vec3(pc.wb.x, gwb, pc.wb.w);
+    vec3 clipped = clipStateRgb(centerClipState);
+    vec4 guide = previewHighlightColorGuide(o, rgb, clipped, vec3(pc.wb.x, gwb, pc.wb.w));
+    rgb = reconstructPostWbHighlight(rgb, vec3(pc.wb.x, gwb, pc.wb.w), guide.rgb, guide.a > 0.5, true);
+    imageStore(outImage, o, vec4(rgb, 1.0));
+}

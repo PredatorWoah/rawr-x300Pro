@@ -1,0 +1,42 @@
+#pragma once
+
+#include "camera/CameraAePriority.h"
+#include "camera/CameraControlTypes.h"
+#include "camera/CameraRequestCadence.h"
+
+namespace rawrcam::camera {
+
+// Frozen intent attached to the framework copy of the request that produced a
+// result. The controller retains its storage until session retirement.
+struct CameraRequestProvenance {
+    uint64_t requestSerial = 0;
+    ExposureControlMode exposureMode = ExposureControlMode::Auto;
+    uint8_t expectedAePriority = camera2_priority::kOff;
+    int64_t requestedExposureTimeNs = 0;
+    int32_t requestedSensitivity = 0;
+    int32_t targetFpsMin = 0;
+    int32_t targetFpsMax = 0;
+    uint64_t optimizedStillRequestId = 0;
+
+    static CameraRequestProvenance from(const CameraControlState& state, uint64_t serial) {
+        CameraRequestProvenance result;
+        result.requestSerial = serial;
+        result.exposureMode = state.exposureMode;
+        result.requestedExposureTimeNs = state.requestedExposureTimeNs;
+        result.requestedSensitivity = state.requestedSensitivity;
+        const bool priority = state.exposureMode == ExposureControlMode::ShutterPriority ||
+                              state.exposureMode == ExposureControlMode::IsoPriority;
+        if (const auto fps = cameraTargetFpsRange(state, priority)) {
+            result.targetFpsMin = (*fps)[0];
+            result.targetFpsMax = (*fps)[1];
+        }
+        if (state.exposureMode == ExposureControlMode::ShutterPriority) {
+            result.expectedAePriority = camera2_priority::kSensorExposureTimePriority;
+        } else if (state.exposureMode == ExposureControlMode::IsoPriority) {
+            result.expectedAePriority = camera2_priority::kSensorSensitivityPriority;
+        }
+        return result;
+    }
+};
+
+}  // namespace rawrcam::camera

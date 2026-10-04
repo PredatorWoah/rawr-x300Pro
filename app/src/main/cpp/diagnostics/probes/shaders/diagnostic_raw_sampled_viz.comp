@@ -1,0 +1,24 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0) uniform usampler2D srcRaw;
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D dst;
+layout(push_constant) uniform PC {
+    uint width;
+    uint height;
+    float black;
+    float white;
+}
+pc;
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.width) || p.y >= int(pc.height)) return;
+    ivec2 r = p * 2;
+    float v = 0.25 * float(texelFetch(srcRaw, r, 0).r + texelFetch(srcRaw, r + ivec2(1, 0), 0).r +
+                           texelFetch(srcRaw, r + ivec2(0, 1), 0).r + texelFetch(srcRaw, r + ivec2(1, 1), 0).r);
+    float x = clamp((v - pc.black) / max(pc.white - pc.black, 1.0), 0.0, 1.0);
+    x = pow(x, 1.0 / 2.2);
+    vec3 c = vec3(x);
+    if ((p.x % 256) == 0) c = vec3(1, 0, 0);
+    if ((p.y % 256) == 0) c = vec3(0, 1, 0);
+    imageStore(dst, p, vec4(c, 1));
+}
