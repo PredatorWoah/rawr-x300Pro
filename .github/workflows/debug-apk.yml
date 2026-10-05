@@ -18,6 +18,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # The native CMake configure runs Python helpers through uv.
+      - uses: astral-sh/setup-uv@v5
+
       - name: Install pinned Android SDK components
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
