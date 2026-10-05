@@ -29,7 +29,8 @@ std::string jString(JNIEnv* env, jstring value) {
     return out;
 }
 bool multiframeChromaDenoise(JNIEnv* env, jfloatArray values) {
-    if (!values || env->GetArrayLength(values) != 23) return false;
+    const jsize count = values ? env->GetArrayLength(values) : 0;
+    if (count != 23 && count != 25 && count != 26) return false;
     jfloat flag = 0.0f;
     env->GetFloatArrayRegion(values, 22, 1, &flag);
     return flag > 0.5f;
@@ -39,8 +40,9 @@ rawrcam::capture::multiframe::MultiframeTuning multiframeTuning(JNIEnv* env, jfl
     if (!values) return out;
     const jsize count = env->GetArrayLength(values);
     // 22 tuning values, optionally followed by the multiframe chroma-denoise
-    // flag (read separately by multiframeChromaDenoise()).
-    if (count != 22 && count != 23) return out;
+    // flag (read separately by multiframeChromaDenoise()), then the merge
+    // algorithm, HDR+ strength and (optionally) HDR+ tile size.
+    if (count != 22 && count != 23 && count != 25 && count != 26) return out;
     std::array<jfloat, 22> v{};
     env->GetFloatArrayRegion(values, 0, 22, v.data());
     out.outputScale = v[0];
@@ -83,6 +85,16 @@ rawrcam::capture::multiframe::MultiframeTuning multiframeTuning(JNIEnv* env, jfl
         out.coverageMassHi < out.coverageMassLo)
         return {};
     if (!inRange(out.fallbackChromaGain, 0.0f, 8.0f) || !inRange(out.fallbackLumaGain, 0.0f, 8.0f)) return {};
+    if (count >= 25) {
+        std::array<jfloat, 3> merge{0.0f, 13.0f, 32.0f};
+        env->GetFloatArrayRegion(values, 23, count - 23, merge.data());
+        if (!(merge[0] == 0.0f || merge[0] == 1.0f || merge[0] == 2.0f) || !inRange(merge[1], 1.0f, 22.0f) ||
+            !(merge[2] == 16.0f || merge[2] == 32.0f))
+            return {};
+        out.mergeAlgorithm = static_cast<std::uint32_t>(merge[0]);
+        out.hdrplusStrength = merge[1];
+        out.hdrplusTileSize = static_cast<std::uint32_t>(merge[2]);
+    }
     return out;
 }
 

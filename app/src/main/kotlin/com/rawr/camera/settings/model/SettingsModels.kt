@@ -321,6 +321,12 @@ enum class MultiframeOutputResolution(val label: String, val outputScale: Float)
     Mp24("≈24 MP", 1.385641f)
 }
 
+enum class MultiframeMergeAlgorithm(val nativeId: Int, val label: String) {
+    Wronski(0, "Super-resolution"),
+    HdrPlus(1, "HDR+"),
+    HdrPlusQuality(2, "HDR+ Quality")
+}
+
 enum class MultiframeBaseFrameMode(val nativeId: Int, val label: String) {
     Middle(0, "Middle"),
     Sharpest(1, "Sharpest")
@@ -348,7 +354,9 @@ enum class MultiframeNumericParameter {
     CoverageMassLo,
     CoverageMassHi,
     FallbackChroma,
-    FallbackLuma
+    FallbackLuma,
+    HdrPlusStrength,
+    HdrPlusTileSize
 }
 
 data class MultiframeNumericSpec(
@@ -612,6 +620,31 @@ object MultiframeSpecs {
             2
         )
 
+    val hdrPlusStrength =
+        MultiframeNumericSpec(
+            MultiframeNumericParameter.HdrPlusStrength,
+            "HDR+ Strength",
+            "Lower: keeps more single-frame grain and rejects motion sooner. Higher: cleaner, but moving areas risk ghosting.",
+            1f,
+            22f,
+            13f,
+            1f,
+            0
+        )
+
+    val hdrPlusTileSize =
+        MultiframeNumericSpec(
+            MultiframeNumericParameter.HdrPlusTileSize,
+            "HDR+ Tile Size",
+            "Lower: 16 px follows small moving parts (wind, hands) with less ghosting, slightly noisier at very high ISO. Higher: 32 px aligns more steadily in heavy noise.",
+            16f,
+            32f,
+            32f,
+            16f,
+            0,
+            "px"
+        )
+
     val all =
         listOf(
             maxFrames,
@@ -635,7 +668,9 @@ object MultiframeSpecs {
             coverageMassLo,
             coverageMassHi,
             fallbackChroma,
-            fallbackLuma
+            fallbackLuma,
+            hdrPlusStrength,
+            hdrPlusTileSize
         )
 
     fun forParameter(parameter: MultiframeNumericParameter): MultiframeNumericSpec =
@@ -644,6 +679,9 @@ object MultiframeSpecs {
 
 data class MultiframeTuning(
     val outputResolution: MultiframeOutputResolution = MultiframeOutputResolution.Native,
+    val mergeAlgorithm: MultiframeMergeAlgorithm = MultiframeMergeAlgorithm.Wronski,
+    val hdrPlusStrength: Float = 13f,
+    val hdrPlusTileSize: Int = 32,
     val maxFrames: Int = 16,
     val lkIterations: Int = 5,
     val hessianEpsilonExponent: Int = -10,
@@ -690,6 +728,8 @@ data class MultiframeTuning(
         MultiframeNumericParameter.CoverageMassHi -> coverageMassHi
         MultiframeNumericParameter.FallbackChroma -> fallbackChroma
         MultiframeNumericParameter.FallbackLuma -> fallbackLuma
+        MultiframeNumericParameter.HdrPlusStrength -> hdrPlusStrength
+        MultiframeNumericParameter.HdrPlusTileSize -> hdrPlusTileSize.toFloat()
     }
 
     fun withValue(parameter: MultiframeNumericParameter, value: Float): MultiframeTuning = when (parameter) {
@@ -715,6 +755,8 @@ data class MultiframeTuning(
         MultiframeNumericParameter.CoverageMassHi -> copy(coverageMassHi = value)
         MultiframeNumericParameter.FallbackChroma -> copy(fallbackChroma = value)
         MultiframeNumericParameter.FallbackLuma -> copy(fallbackLuma = value)
+        MultiframeNumericParameter.HdrPlusStrength -> copy(hdrPlusStrength = value.roundToInt().toFloat())
+        MultiframeNumericParameter.HdrPlusTileSize -> copy(hdrPlusTileSize = if (value < 24f) 16 else 32)
     }
 
     fun sanitized(defaults: MultiframeTuning = MultiframeTuning()): MultiframeTuning {
@@ -757,6 +799,10 @@ data class MultiframeTuning(
         fallbackChroma,
         fallbackLuma
     )
+
+    // Appended after the multiframe chroma-denoise flag (native indices 23-25).
+    fun nativeMergeValues(): FloatArray =
+        floatArrayOf(mergeAlgorithm.nativeId.toFloat(), hdrPlusStrength, hdrPlusTileSize.toFloat())
 }
 
 data class SettingsValues(

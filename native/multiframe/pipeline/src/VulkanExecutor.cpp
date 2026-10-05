@@ -18,6 +18,62 @@
 #include "mf_fallback_chroma_trace.h"
 #include "mf_hot_pixel_conceal_prod.h"
 #include "mf_hot_pixel_conceal_trace.h"
+#include "mf_hdrp_prepare_prod.h"
+#include "mf_hdrp_prepare_trace.h"
+#include "mf_hdrp_hot_pixel_prod.h"
+#include "mf_hdrp_hot_pixel_trace.h"
+#include "mf_hdrp_avg_pool_prod.h"
+#include "mf_hdrp_avg_pool_trace.h"
+#include "mf_hdrp_blur_prod.h"
+#include "mf_hdrp_blur_trace.h"
+#include "mf_hdrp_upsample_align_prod.h"
+#include "mf_hdrp_upsample_align_trace.h"
+#include "mf_hdrp_correct_upsampling_prod.h"
+#include "mf_hdrp_correct_upsampling_trace.h"
+#include "mf_hdrp_tile_diff_prod.h"
+#include "mf_hdrp_tile_diff_trace.h"
+#include "mf_hdrp_best_tile_prod.h"
+#include "mf_hdrp_best_tile_trace.h"
+#include "mf_hdrp_warp_prod.h"
+#include "mf_hdrp_warp_trace.h"
+#include "mf_hdrp_color_diff_prod.h"
+#include "mf_hdrp_color_diff_trace.h"
+#include "mf_hdrp_column_sum_prod.h"
+#include "mf_hdrp_column_sum_trace.h"
+#include "mf_hdrp_mean_prod.h"
+#include "mf_hdrp_mean_trace.h"
+#include "mf_hdrp_merge_weight_prod.h"
+#include "mf_hdrp_merge_weight_trace.h"
+#include "mf_hdrp_accumulate_prod.h"
+#include "mf_hdrp_accumulate_trace.h"
+#include "mf_hdrp_finalize_prod.h"
+#include "mf_hdrp_finalize_trace.h"
+#include "mf_hdrq_to_rgba_prod.h"
+#include "mf_hdrq_to_rgba_trace.h"
+#include "mf_hdrq_warp_rgba_prod.h"
+#include "mf_hdrq_warp_rgba_trace.h"
+#include "mf_hdrq_rms_prod.h"
+#include "mf_hdrq_rms_trace.h"
+#include "mf_hdrq_mismatch_prod.h"
+#include "mf_hdrq_mismatch_trace.h"
+#include "mf_hdrq_region_mean_prod.h"
+#include "mf_hdrq_region_mean_trace.h"
+#include "mf_hdrq_mismatch_norm_prod.h"
+#include "mf_hdrq_mismatch_norm_trace.h"
+#include "mf_hdrq_forward_dft_prod.h"
+#include "mf_hdrq_forward_dft_trace.h"
+#include "mf_hdrq_merge_prod.h"
+#include "mf_hdrq_merge_trace.h"
+#include "mf_hdrq_deconvolute_prod.h"
+#include "mf_hdrq_deconvolute_trace.h"
+#include "mf_hdrq_backward_dft_prod.h"
+#include "mf_hdrq_backward_dft_trace.h"
+#include "mf_hdrq_border_prod.h"
+#include "mf_hdrq_border_trace.h"
+#include "mf_hdrq_accumulate_prod.h"
+#include "mf_hdrq_accumulate_trace.h"
+#include "mf_hdrq_shift_table_prod.h"
+#include "mf_hdrq_shift_table_trace.h"
 #include "mf_affine_gate_trace.h"
 #include "mf_alignment_local5_prod.h"
 #include "mf_alignment_local5_trace.h"
@@ -260,7 +316,175 @@ const std::array<Spec, static_cast<size_t>(ShaderId::Count)> specs{{{"raw_normal
                                    mf_hot_pixel_conceal_prod_spv_size,
                                    mf_hot_pixel_conceal_trace_spv,
                                    mf_hot_pixel_conceal_trace_spv_size,
-                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}}}};
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_prepare",
+                                   mf_hdrp_prepare_prod_spv,
+                                   mf_hdrp_prepare_prod_spv_size,
+                                   mf_hdrp_prepare_trace_spv,
+                                   mf_hdrp_prepare_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrp_hot_pixel",
+                                   mf_hdrp_hot_pixel_prod_spv,
+                                   mf_hdrp_hot_pixel_prod_spv_size,
+                                   mf_hdrp_hot_pixel_trace_spv,
+                                   mf_hdrp_hot_pixel_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_avg_pool",
+                                   mf_hdrp_avg_pool_prod_spv,
+                                   mf_hdrp_avg_pool_prod_spv_size,
+                                   mf_hdrp_avg_pool_trace_spv,
+                                   mf_hdrp_avg_pool_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrp_blur",
+                                   mf_hdrp_blur_prod_spv,
+                                   mf_hdrp_blur_prod_spv_size,
+                                   mf_hdrp_blur_trace_spv,
+                                   mf_hdrp_blur_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrp_upsample_align",
+                                   mf_hdrp_upsample_align_prod_spv,
+                                   mf_hdrp_upsample_align_prod_spv_size,
+                                   mf_hdrp_upsample_align_trace_spv,
+                                   mf_hdrp_upsample_align_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}, {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_correct_upsampling",
+                                   mf_hdrp_correct_upsampling_prod_spv,
+                                   mf_hdrp_correct_upsampling_prod_spv_size,
+                                   mf_hdrp_correct_upsampling_trace_spv,
+                                   mf_hdrp_correct_upsampling_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}, {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_tile_diff",
+                                   mf_hdrp_tile_diff_prod_spv,
+                                   mf_hdrp_tile_diff_prod_spv_size,
+                                   mf_hdrp_tile_diff_trace_spv,
+                                   mf_hdrp_tile_diff_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}, {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_best_tile",
+                                   mf_hdrp_best_tile_prod_spv,
+                                   mf_hdrp_best_tile_prod_spv_size,
+                                   mf_hdrp_best_tile_trace_spv,
+                                   mf_hdrp_best_tile_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}, {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}, {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_warp",
+                                   mf_hdrp_warp_prod_spv,
+                                   mf_hdrp_warp_prod_spv_size,
+                                   mf_hdrp_warp_trace_spv,
+                                   mf_hdrp_warp_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_color_diff",
+                                   mf_hdrp_color_diff_prod_spv,
+                                   mf_hdrp_color_diff_prod_spv_size,
+                                   mf_hdrp_color_diff_trace_spv,
+                                   mf_hdrp_color_diff_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrp_column_sum",
+                                   mf_hdrp_column_sum_prod_spv,
+                                   mf_hdrp_column_sum_prod_spv_size,
+                                   mf_hdrp_column_sum_trace_spv,
+                                   mf_hdrp_column_sum_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_mean",
+                                   mf_hdrp_mean_prod_spv,
+                                   mf_hdrp_mean_prod_spv_size,
+                                   mf_hdrp_mean_trace_spv,
+                                   mf_hdrp_mean_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}, {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_merge_weight",
+                                   mf_hdrp_merge_weight_prod_spv,
+                                   mf_hdrp_merge_weight_prod_spv_size,
+                                   mf_hdrp_merge_weight_trace_spv,
+                                   mf_hdrp_merge_weight_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrp_accumulate",
+                                   mf_hdrp_accumulate_prod_spv,
+                                   mf_hdrp_accumulate_prod_spv_size,
+                                   mf_hdrp_accumulate_trace_spv,
+                                   mf_hdrp_accumulate_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrp_finalize",
+                                   mf_hdrp_finalize_prod_spv,
+                                   mf_hdrp_finalize_prod_spv_size,
+                                   mf_hdrp_finalize_trace_spv,
+                                   mf_hdrp_finalize_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrq_to_rgba",
+                                   mf_hdrq_to_rgba_prod_spv,
+                                   mf_hdrq_to_rgba_prod_spv_size,
+                                   mf_hdrq_to_rgba_trace_spv,
+                                   mf_hdrq_to_rgba_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrq_warp_rgba",
+                                   mf_hdrq_warp_rgba_prod_spv,
+                                   mf_hdrq_warp_rgba_prod_spv_size,
+                                   mf_hdrq_warp_rgba_trace_spv,
+                                   mf_hdrq_warp_rgba_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrq_rms",
+                                   mf_hdrq_rms_prod_spv,
+                                   mf_hdrq_rms_prod_spv_size,
+                                   mf_hdrq_rms_trace_spv,
+                                   mf_hdrq_rms_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrq_mismatch",
+                                   mf_hdrq_mismatch_prod_spv,
+                                   mf_hdrq_mismatch_prod_spv_size,
+                                   mf_hdrq_mismatch_trace_spv,
+                                   mf_hdrq_mismatch_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrq_region_mean",
+                                   mf_hdrq_region_mean_prod_spv,
+                                   mf_hdrq_region_mean_prod_spv_size,
+                                   mf_hdrq_region_mean_trace_spv,
+                                   mf_hdrq_region_mean_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrq_mismatch_norm",
+                                   mf_hdrq_mismatch_norm_prod_spv,
+                                   mf_hdrq_mismatch_norm_prod_spv_size,
+                                   mf_hdrq_mismatch_norm_trace_spv,
+                                   mf_hdrq_mismatch_norm_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrq_forward_dft",
+                                   mf_hdrq_forward_dft_prod_spv,
+                                   mf_hdrq_forward_dft_prod_spv_size,
+                                   mf_hdrq_forward_dft_trace_spv,
+                                   mf_hdrq_forward_dft_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrq_merge",
+                                   mf_hdrq_merge_prod_spv,
+                                   mf_hdrq_merge_prod_spv_size,
+                                   mf_hdrq_merge_trace_spv,
+                                   mf_hdrq_merge_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}},
+                                  {"hdrq_deconvolute",
+                                   mf_hdrq_deconvolute_prod_spv,
+                                   mf_hdrq_deconvolute_prod_spv_size,
+                                   mf_hdrq_deconvolute_trace_spv,
+                                   mf_hdrq_deconvolute_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrq_backward_dft",
+                                   mf_hdrq_backward_dft_prod_spv,
+                                   mf_hdrq_backward_dft_prod_spv_size,
+                                   mf_hdrq_backward_dft_trace_spv,
+                                   mf_hdrq_backward_dft_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrq_border",
+                                   mf_hdrq_border_prod_spv,
+                                   mf_hdrq_border_prod_spv_size,
+                                   mf_hdrq_border_trace_spv,
+                                   mf_hdrq_border_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrq_accumulate",
+                                   mf_hdrq_accumulate_prod_spv,
+                                   mf_hdrq_accumulate_prod_spv_size,
+                                   mf_hdrq_accumulate_trace_spv,
+                                   mf_hdrq_accumulate_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}, {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE}}},
+                                  {"hdrq_shift_table",
+                                   mf_hdrq_shift_table_prod_spv,
+                                   mf_hdrq_shift_table_prod_spv_size,
+                                   mf_hdrq_shift_table_trace_spv,
+                                   mf_hdrq_shift_table_trace_spv_size,
+                                   {{0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER}}}}};
 void ck(VkResult r, const char* w) {
     if (r != VK_SUCCESS) throw std::runtime_error(std::string(w) + " VkResult=" + std::to_string(r));
 }
@@ -285,6 +509,8 @@ void VulkanExecutor::initialize(VkDevice d, bool wantTrace) {
         "robust_stats",       "robust_warp",        "robust_flow_scale", "robust_photometric", "robust_erode5",
         "affine_fit",         "affine_gate",        "support_accumulate", "accumulate",       "reference_accumulate",
         "a11_finalize",       "noise_estimate",     "fallback_chroma",    "hot_pixel_conceal",
+        "hdrp_prepare", "hdrp_hot_pixel", "hdrp_avg_pool", "hdrp_blur", "hdrp_upsample_align", "hdrp_correct_upsampling", "hdrp_tile_diff", "hdrp_best_tile", "hdrp_warp", "hdrp_color_diff", "hdrp_column_sum", "hdrp_mean", "hdrp_merge_weight", "hdrp_accumulate", "hdrp_finalize",
+        "hdrq_to_rgba", "hdrq_warp_rgba", "hdrq_rms", "hdrq_mismatch", "hdrq_region_mean", "hdrq_mismatch_norm", "hdrq_forward_dft", "hdrq_merge", "hdrq_deconvolute", "hdrq_backward_dft", "hdrq_border", "hdrq_accumulate", "hdrq_shift_table",
     };
     static_assert(sizeof(kOrder) / sizeof(kOrder[0]) == static_cast<size_t>(ShaderId::Count),
                   "executor spec order table out of sync with ShaderId");
