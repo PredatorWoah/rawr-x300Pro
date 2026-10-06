@@ -279,6 +279,7 @@ struct NativeCameraController::Impl final : CameraEventSink {
         results.reset();
         focusControls.reset(control);
         starting = true;
+        deviceSession.setLenientRequestKeys(scanActive.load(std::memory_order_relaxed));
         const std::optional<LensRoute> selected =
             deviceSession.select(*requested, [this](const std::string& line) { diag(line); });
         if (!selected) {
