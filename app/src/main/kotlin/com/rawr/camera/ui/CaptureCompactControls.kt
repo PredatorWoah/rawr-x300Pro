@@ -17,6 +17,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import com.rawr.camera.architecture.CaptureDispatch
 import com.rawr.camera.architecture.CaptureFilmEvent
+import com.rawr.camera.model.CaptureMode
 import com.rawr.camera.model.CaptureUiState
 import com.rawr.camera.model.ExposureParameter
 import com.rawr.camera.model.FilmSimQuickState
@@ -97,6 +98,10 @@ internal fun CompactParamRow(state: CaptureUiState, dispatch: CaptureDispatch, m
             .testTag(CaptureTestTags.COMPACT_PARAM_ROW),
         horizontalArrangement = Arrangement.spacedBy(CaptureDimens.ControlGap)
     ) {
+        // Video exposure runs on shutter angle, so the photo mode chip would only mislead there.
+        if (state.captureMode == CaptureMode.Photo) {
+            CompactModeChip(state, dispatch, Modifier.weight(.95f).fillMaxHeight())
+        }
         CompactWbButton(state, dispatch, Modifier.weight(1.3f).fillMaxHeight())
         CompactExposureButton(ExposureParameter.Shutter, state, dispatch, Modifier.weight(1f).fillMaxHeight())
         CompactExposureButton(ExposureParameter.Iso, state, dispatch, Modifier.weight(1f).fillMaxHeight())

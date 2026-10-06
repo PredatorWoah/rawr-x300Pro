@@ -42,6 +42,10 @@ internal fun ExposureMonitor(state: CaptureMonitorState) {
     val boost = state.sensitivityBoost
     val boostValue = boost?.let { "×%.2f".format(it / 100f) } ?: "—"
     val boostActive = boost != null && boost > 100
+    // Compact photo controls already show WB, SS, ISO and EV under the preview, and frame rate only matters while
+    // recording, so the readout keeps what is not shown elsewhere: focus distance, and boost when it is active.
+    val showApplied = !state.compactLayout || state.videoMode
+    val showTechnical = state.videoMode
     Row(
         Modifier
             .fillMaxWidth()
@@ -51,17 +55,21 @@ internal fun ExposureMonitor(state: CaptureMonitorState) {
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MonitorMetric("WB", wbValue)
-        MonitorMetric("SS", state.exposureApplied.shutter?.displayLabel ?: "—")
-        MonitorMetric("ISO", state.exposureApplied.iso?.displayLabel ?: "—")
-        MonitorMetric(meterLabel, state.exposureApplied.evOrMeter?.displayLabel ?: "—")
+        if (showApplied) {
+            MonitorMetric("WB", wbValue)
+            MonitorMetric("SS", state.exposureApplied.shutter?.displayLabel ?: "—")
+            MonitorMetric("ISO", state.exposureApplied.iso?.displayLabel ?: "—")
+            MonitorMetric(meterLabel, state.exposureApplied.evOrMeter?.displayLabel ?: "—")
+        }
         MonitorMetric("FOC", focusValue)
-        MonitorMetric("FPS", fpsValue)
-        MonitorMetric(
-            "BST",
-            boostValue,
-            valueColor = if (boostActive) Color.White else Color.White.copy(alpha = .45f)
-        )
+        if (showTechnical) MonitorMetric("FPS", fpsValue)
+        if (showTechnical || boostActive) {
+            MonitorMetric(
+                "BST",
+                boostValue,
+                valueColor = if (boostActive) Color.White else Color.White.copy(alpha = .45f)
+            )
+        }
     }
 }
 

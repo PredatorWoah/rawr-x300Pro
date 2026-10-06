@@ -37,3 +37,8 @@ jobs:
           name: rawr-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # After the APK is uploaded, so a failing test never withholds the build. Read the result in this job's log.
+      - name: Kotlin unit tests
+        continue-on-error: true
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
