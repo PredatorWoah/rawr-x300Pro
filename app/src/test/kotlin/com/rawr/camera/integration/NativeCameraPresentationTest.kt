@@ -15,7 +15,8 @@ class NativeCameraPresentationTest {
         ))
         val pending = NativeFocusPresentation.requestMode(current, FocusMode.Mf)
         assertEquals(FocusMode.Mf, pending.focus.mode)
-        assertEquals(0.6f, pending.focus.mfNormalized, 0.00001f)
+        // 4 of 10 diopters on the cubic focus rail: 1 - (4 / 10)^(1 / 3).
+        assertEquals((1.0 - Math.cbrt(0.4)).toFloat(), pending.focus.mfNormalized, 0.00001f)
         val dragged = pending.copy(focus = pending.focus.copy(mfNormalized = 0.3f))
         assertEquals(0.3f, NativeFocusPresentation.requestMode(dragged, FocusMode.Mf).focus.mfNormalized)
         // The authoritative acknowledgment may seed from a newer lens position.
