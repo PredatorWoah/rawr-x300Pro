@@ -111,12 +111,19 @@ void testProfileMatching() {
     // An unlisted variant is caught by vivo's project code.
     m = matchBuiltInProfile(props({{"ro.product.model", "V2547X"}, {"ro.vivo.product.model", "PD2547"}}));
     assert(m.profileId == "vivo_x300_ultra" && m.rule == "property:ro.vivo.product.model" && !m.verified);
+    // X300 Pro (Dimensity 9500 / Mali): exact, tested model.
+    m = matchBuiltInProfile(props({{"ro.product.model", "V2514"}}));
+    assert(m.profileId == "vivo_x300_pro" && m.rule == "model" && m.verified);
+    const auto& pro = builtInCameraProfile("vivo_x300_pro");
+    assert(pro.lenses.size() == 4);
+    assert(routeForLens(pro, "UW")->cameraId == "4" && routeForLens(pro, "1x")->cameraId == "2");
+    assert(routeForLens(pro, "3.5x")->cameraId == "3" && routeForLens(pro, "8x")->cameraId == "5");
     // Other phones (X200 Ultra) and missing properties get generic.
     m = matchBuiltInProfile(props({{"ro.product.model", "V2454A"}, {"ro.vivo.product.model", "PD2454"}}));
     assert(m.profileId == "generic" && m.rule == "none" && !m.verified);
     assert(matchBuiltInProfile(props({})).profileId == "generic");
 
-    assert(isBuiltInProfileId("vivo_x300_ultra") && isBuiltInProfileId("generic"));
+    assert(isBuiltInProfileId("vivo_x300_ultra") && isBuiltInProfileId("vivo_x300_pro") && isBuiltInProfileId("generic"));
     assert(!isBuiltInProfileId("") && !isBuiltInProfileId("user") && !isBuiltInProfileId("v2562"));
 
     // Rejected built-ins: reserved id, no match rules.
