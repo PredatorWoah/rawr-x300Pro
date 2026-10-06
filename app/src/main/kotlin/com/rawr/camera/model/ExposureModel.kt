@@ -51,14 +51,21 @@ fun DiscreteExposureCapability.zeroEvCandidateId(): String {
 }
 
 /**
+ * Exponent of the manual focus rail curve, equal to `kManualFocusCurveExponent` in native ManualFocusCurve.h. A rail
+ * linear in diopters leaves everything beyond a few metres in its last few percent, so it is spread over the logarithm
+ * of distance instead (`diopters = (1 - normalized)^3 * minimumFocusDistance`).
+ */
+const val MF_CURVE_EXPONENT = 3f
+
+/**
  * Converts a live lens position in diopters to the normalized MF coordinate.
- * Inverse of the native normalized->diopters mapping
- * (`diopters = (1 - normalized) * minimumFocusDistance`).
+ * Inverse of the native normalized->diopters mapping.
  * Returns null when the minimum focus distance is unknown (fixed-focus).
  */
 fun mfNormalizedFromDiopters(diopters: Float, minimumFocusDistance: Float): Float? {
     if (minimumFocusDistance <= 0f) return null
-    return (1f - diopters / minimumFocusDistance).coerceIn(0f, 1f)
+    val ratio = (diopters / minimumFocusDistance).coerceIn(0f, 1f)
+    return (1f - Math.pow(ratio.toDouble(), 1.0 / MF_CURVE_EXPONENT).toFloat()).coerceIn(0f, 1f)
 }
 
 fun DiscreteExposureCapability.labelsAround(candidateId: String): ExposureLabels {

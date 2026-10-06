@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "camera/ManualFocusCurve.h"
+
 namespace rawrcam::camera {
 
 void CameraFocusControls::reset(CameraControlState& state) {
@@ -18,7 +20,7 @@ bool CameraFocusControls::requestMode(CameraControlState& state, FocusControlMod
         state.capabilities.minimumFocusDistance > 0 && std::isfinite(state.capabilities.minimumFocusDistance) &&
         std::isfinite(*state.appliedFocusDistance)) {
         state.requestedManualFocusNormalized =
-            std::clamp(1.0f - *state.appliedFocusDistance / state.capabilities.minimumFocusDistance, 0.0f, 1.0f);
+            manualFocusNormalized(*state.appliedFocusDistance, state.capabilities.minimumFocusDistance);
     }
     state.focusMode = mode;
     clearTap(state);
