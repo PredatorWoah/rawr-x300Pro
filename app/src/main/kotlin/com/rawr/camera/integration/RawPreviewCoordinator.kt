@@ -33,6 +33,11 @@ class RawPreviewCoordinator(application: Application) : AutoCloseable {
 
     fun videoStats(): String = native.videoStats(nativeHandle)
 
+    fun startSensorModeScan(first: Int, last: Int, dwellMs: Int): Boolean =
+        synchronized(this) { !closed && native.startSensorModeScan(nativeHandle, first, last, dwellMs) }
+
+    fun sensorModeScanActive(): Boolean = synchronized(this) { !closed && native.sensorModeScanActive(nativeHandle) }
+
     /**
      * Arms the idle-preview crop to the exact record window (recording output
      * size, 0 clears). Fire-and-forget like the other setters; the frame
@@ -71,7 +76,11 @@ class RawPreviewCoordinator(application: Application) : AutoCloseable {
             native.create(
                 application.filesDir.absolutePath,
                 application.applicationInfo.nativeLibraryDir,
-                GpuDriverFileStore(application).activeDriverPath().orEmpty()
+                if (GpuPlatform.supportsCustomDriver) {
+                    GpuDriverFileStore(application).activeDriverPath().orEmpty()
+                } else {
+                    ""
+                }
             )
         native.setAssetManager(nativeHandle, application.assets)
     }

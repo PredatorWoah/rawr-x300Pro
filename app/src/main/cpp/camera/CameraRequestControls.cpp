@@ -10,6 +10,7 @@
 #include "camera/Camera2PriorityCompat.h"
 #include "camera/CameraAePriority.h"
 #include "camera/CameraRequestCadence.h"
+#include "camera/ManualFocusCurve.h"
 #include "camera/WhiteBalanceMath.h"
 
 namespace rawrcam::camera {
@@ -242,7 +243,7 @@ CameraControlApplyResult applyCameraControlState(ACaptureRequest* request, const
 
     if (state.focusMode == FocusControlMode::Manual && state.capabilities.manualFocusSupported) {
         const float normalized = std::clamp(state.requestedManualFocusNormalized, 0.0f, 1.0f);
-        const float diopters = (1.0f - normalized) * state.capabilities.minimumFocusDistance;
+        const float diopters = manualFocusDiopters(normalized, state.capabilities.minimumFocusDistance);
         (void)ACaptureRequest_setEntry_float(request, ACAMERA_LENS_FOCUS_DISTANCE, 1, &diopters);
     }
     (void)ACaptureRequest_setEntry_i32(request, ACAMERA_CONTROL_AF_REGIONS, metering.afRegion ? 5 : 0,

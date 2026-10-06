@@ -133,7 +133,7 @@ class StillOutputStore(
             scratch = recoveryScratch.remove(output.jobName).orEmpty())
     }
 
-    data class DngCompletion(val allDone: Boolean, val success: Boolean)
+    data class DngCompletion(val allDone: Boolean, val success: Boolean, val uri: Uri? = null)
     data class JpegCompletion(val uri: Uri?, val success: Boolean)
 
     @Synchronized
@@ -146,7 +146,7 @@ class StillOutputStore(
         val published = finishTarget(item, target.uri.toUri(), success)
         val allDone = dngDone(item)
         retireIfDone(requestId, item)
-        return DngCompletion(allDone, published)
+        return DngCompletion(allDone, published, if (published) target.uri.toUri() else null)
     }
 
     private fun dngDone(item: PendingCapture) = item.journal.targets.filter { it.role != "jpeg" }

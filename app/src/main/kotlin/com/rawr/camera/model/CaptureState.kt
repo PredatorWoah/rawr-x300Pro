@@ -4,6 +4,33 @@ enum class ExposureMode(val shortLabel: String) { Auto("A"), Manual("M"), Shutte
 
 enum class ExposureParameter { Shutter, Iso, Ev }
 
+/** Order the compact mode chip steps through: Auto, then the priority modes, then full Manual. */
+private val exposureModeCycle = listOf(
+    ExposureMode.Auto,
+    ExposureMode.ShutterPriority,
+    ExposureMode.IsoPriority,
+    ExposureMode.Manual
+)
+
+/** Next mode for a tap on the mode chip, skipping modes this camera cannot do. Returns [current] if nothing else fits. */
+fun nextExposureMode(current: ExposureMode, supported: Set<ExposureMode>): ExposureMode {
+    val start = exposureModeCycle.indexOf(current)
+    for (step in 1..exposureModeCycle.size) {
+        val candidate = exposureModeCycle[(start + step) % exposureModeCycle.size]
+        if (candidate == ExposureMode.Auto || candidate in supported) return candidate
+    }
+    return current
+}
+
+/** Words for the compact mode chip. */
+val ExposureMode.chipLabel: String
+    get() = when (this) {
+        ExposureMode.Auto -> "AUTO"
+        ExposureMode.ShutterPriority -> "SHUTTER"
+        ExposureMode.IsoPriority -> "ISO"
+        ExposureMode.Manual -> "MANUAL"
+    }
+
 enum class ToneParameter {
     Blacks,
     Shadows,

@@ -179,10 +179,6 @@ class MainActivity : ComponentActivity() {
             }
             val selectedVideo by videoSelection.collectAsStateWithLifecycle(initialVideoSelection)
             val recording by captureViewModel.recording.state.collectAsStateWithLifecycle()
-            androidx.compose.runtime.LaunchedEffect(recording.recording) {
-                if (recording.recording) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            }
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 captureViewModel.recording.errors.collect { message ->
                     Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
@@ -230,10 +226,43 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Debug: a queued sensor-mode scan runs once the camera is up. The user watches nothing; the result is in the log.
+    private fun maybeRunSensorModeScan(generation: Long) {
+        val prefs = getSharedPreferences(
+            com.rawr.camera.settings.ui.SENSOR_SCAN_PREFS,
+            MODE_PRIVATE
+        )
+        if (!prefs.getBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false)) return
+        lifecycleScope.launch {
+            delay(3000)
+            if (!started || generation != startGeneration) return@launch
+            prefs.edit().putBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false).apply()
+            val coordinator = captureViewModel.previewCoordinator
+            if (!coordinator.startSensorModeScan(0, 40, 3500)) {
+                Toast.makeText(this@MainActivity, "Sensor mode scan could not start", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            Toast.makeText(
+                this@MainActivity,
+                "Scanning sensor modes 0 to 40. Keep the phone still on a detailed scene (about 2.5 minutes).",
+                Toast.LENGTH_LONG
+            ).show()
+            while (coordinator.sensorModeScanActive()) delay(1000)
+            Toast.makeText(
+                this@MainActivity,
+                "Sensor mode scan finished. Export the Diagnostics Bundle.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         started = true
+        // A viewfinder you are only looking at must not time out; onStop clears this.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val generation = ++startGeneration
+        maybeRunSensorModeScan(generation)
         lifecycleScope.launch {
             val renderer = com.rawr.camera.renderer.RendererStore.get(this@MainActivity)
             renderer.awaitReady()
@@ -321,7 +350,8 @@ class MainActivity : ComponentActivity() {
     private fun openGalleryImage(uri: Uri) {
         val intent =
             Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "image/jpeg")
+                // A DNG-only shot has no JPEG: ask for whatever type the file really is.
+                setDataAndType(uri, contentResolver.getType(uri) ?: "image/*")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         try {

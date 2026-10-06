@@ -9,12 +9,17 @@ data class CaptureMonitorState(
     val focusDiopters: Float?,
     val rawFps: Double?,
     val viewfinderFps: Double?,
-    val sensitivityBoost: Int?
+    val sensitivityBoost: Int?,
+    /** Compact controls already show WB, SS, ISO and EV under the preview, so the monitor must not repeat them. */
+    val compactLayout: Boolean = false,
+    val videoMode: Boolean = false
 )
 
 fun CaptureUiState.monitorProjection() = CaptureMonitorState(
     exposureControl.mode, whiteBalanceTemperatureK, whiteBalanceTint, exposureApplied,
-    focus.appliedFocusDiopters, rawFps, viewfinderFps, sensitivityBoost
+    focus.appliedFocusDiopters, rawFps, viewfinderFps, sensitivityBoost,
+    compactLayout = captureLayout.usesButtonStrip,
+    videoMode = captureMode == CaptureMode.Video
 )
 
 /** Excludes observation fields that have dedicated render slots. Applied control seeds are retained. */

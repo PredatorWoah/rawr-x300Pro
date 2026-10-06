@@ -40,6 +40,11 @@ struct RawContentStatsInput {
     float whiteLevel = 1023.0f;
     // Sample every Nth Bayer quad in each direction; 1 samples every quad.
     uint32_t quadStep = 8;
+    // When both are non-zero the line also carries a coarse green-brightness map, gridColumns x gridRows cells in
+    // row-major order, so the framing of two frames (and hence the zoom between sensor modes) can be compared from a
+    // log alone. Off by default: it is only worth the extra log bytes while scanning sensor modes.
+    uint32_t gridColumns = 0;
+    uint32_t gridRows = 0;
 };
 
 // One-line summary of the RAW plane content, to tell a black or garbage

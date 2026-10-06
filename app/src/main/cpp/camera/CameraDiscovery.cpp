@@ -19,8 +19,10 @@ std::optional<ACameraMetadata_const_entry> entry(const ACameraMetadata* metadata
     return value;
 }
 
-std::string formatRawSizeList(const ACameraMetadata* characteristics) {
-    const auto e = entry(characteristics, ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS);
+// tag selects the default table or the maximum-resolution table of an ultra high resolution sensor.
+std::string formatRawSizeList(const ACameraMetadata* characteristics,
+                              uint32_t tag = ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS) {
+    const auto e = entry(characteristics, tag);
     if (!e || !e->data.i32 || e->count < 4) return {};
 
     std::ostringstream out;
@@ -94,6 +96,14 @@ void emitCameraDiscovery(ACameraManager* manager, const CameraDiagnostic& diagno
         line << " rawSizes=" << formatRawSizeList(characteristics);
         if (pixel && pixel->data.i32 && pixel->count >= 2) {
             line << " pixelArray=" << pixel->data.i32[0] << 'x' << pixel->data.i32[1];
+        }
+        // Full-resolution (50 / 200 MP) RAW is only advertised through the maximum-resolution tables.
+        const auto maxResRaw =
+            formatRawSizeList(characteristics, ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_MAXIMUM_RESOLUTION);
+        line << " maxResRawSizes=" << (maxResRaw.empty() ? "none" : maxResRaw);
+        const auto maxResPixel = entry(characteristics, ACAMERA_SENSOR_INFO_PIXEL_ARRAY_SIZE_MAXIMUM_RESOLUTION);
+        if (maxResPixel && maxResPixel->data.i32 && maxResPixel->count >= 2) {
+            line << " maxResPixelArray=" << maxResPixel->data.i32[0] << 'x' << maxResPixel->data.i32[1];
         }
         diagnostic(line.str());
         ACameraMetadata_free(characteristics);

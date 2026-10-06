@@ -33,6 +33,8 @@ void setOisEnabled(EngineHandle handle, bool enabled) noexcept;
 void setAntibandingMode(EngineHandle handle, uint8_t mode) noexcept;
 void selectLens(EngineHandle handle, const std::string& lensId) noexcept;
 bool setCameraProfile(EngineHandle handle, const std::string& json) noexcept;
+bool startSensorModeScan(EngineHandle handle, int first, int last, int dwellMs) noexcept;
+bool sensorModeScanActive(EngineHandle handle) noexcept;
 void setPreferredCameraId(EngineHandle handle, const std::string& cameraId) noexcept;
 void setPreferredAccessRoute(EngineHandle handle, const std::string& route) noexcept;
 void setPreferredColorMode(EngineHandle handle, const std::string& mode) noexcept;

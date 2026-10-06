@@ -5,6 +5,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.rawr.camera.integration.GpuPlatform
 import com.rawr.camera.settings.architecture.*
 import com.rawr.camera.settings.model.*
 
@@ -88,15 +89,17 @@ internal fun ExperimentalSettings(state: SettingsUiState, dispatch: SettingsDisp
                 title = "Persistent Engine",
                 checked = state.values.persistentEngineEnabled
             ) { dispatch.invoke(SetPersistentEngineEnabled(it)) }
-            SettingDivider()
-            ToggleSubmenuRow(
-                title = "GPU Driver",
-                value = if (state.values.customGpuDriverEnabled) state.values.customGpuDriverName ?: "Custom" else "System",
-                checked = state.values.customGpuDriverEnabled,
-                testTag = SettingsTestTags.row("Experimental", "gpu_driver"),
-                onOpen = { dispatch.invoke(OpenSection(SettingsSection.GpuDriver)) },
-                onCheckedChange = { dispatch.invoke(SetCustomGpuDriverEnabled(it)) }
-            )
+            if (GpuPlatform.supportsCustomDriver) {
+                SettingDivider()
+                ToggleSubmenuRow(
+                    title = "GPU Driver",
+                    value = if (state.values.customGpuDriverEnabled) state.values.customGpuDriverName ?: "Custom" else "System",
+                    checked = state.values.customGpuDriverEnabled,
+                    testTag = SettingsTestTags.row("Experimental", "gpu_driver"),
+                    onOpen = { dispatch.invoke(OpenSection(SettingsSection.GpuDriver)) },
+                    onCheckedChange = { dispatch.invoke(SetCustomGpuDriverEnabled(it)) }
+                )
+            }
         }
     }
 }
@@ -162,5 +165,33 @@ internal fun DebugSettings(
                 onClick = { dispatch.invoke(OpenSection(SettingsSection.InternalLogging)) }
             )
         }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        SettingsGroup(
+            title = "Sensor Modes",
+            description = "Steps vivo's sensor-mode key through 0 to 40 on the lens you were using, about 3.5 s each " +
+                "(around 2.5 minutes), to find native-resolution crops. Turn on Persistent Diagnostics first. " +
+                "Then open the camera, keep the phone still on a detailed, well lit scene, and wait for the " +
+                "finished message before exporting the Diagnostics Bundle."
+        ) {
+            SettingsRow(
+                title = "Scan sensor modes on next camera open",
+                value = "0 to 40",
+                onClick = {
+                    context.getSharedPreferences(SENSOR_SCAN_PREFS, android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(SENSOR_SCAN_REQUESTED, true)
+                        .apply()
+                    android.widget.Toast.makeText(
+                        context,
+                        "Scan queued. Go back to the camera.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+        }
     }
 }
+
+/** One-shot request flag for the debug sensor mode scan, consumed by the capture screen. */
+const val SENSOR_SCAN_PREFS = "debug_sensor_scan"
+const val SENSOR_SCAN_REQUESTED = "scan_requested"

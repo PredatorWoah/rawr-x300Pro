@@ -9,6 +9,13 @@ capture, video recording, and DNG renderer.
 
 Requires RAW camera access and compatible Vulkan hardware. General device compatibility is not yet established.
 
+Built-in camera profiles (`app/src/main/cpp/camera/profiles/`):
+
+| Device | Model | GPU | Status |
+|---|---|---|---|
+| vivo X300 Ultra | V2562 | Adreno 840 | Tested |
+| vivo X300 Pro | V2514 | Mali-G1-Ultra MC12 | Camera routes from a device log; lens routing and frame rate untested |
+
 ## Build
 
 Use JDK 17, an Android SDK, and `uv` on macOS or Linux. Install the pinned components:

@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +18,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import com.rawr.camera.architecture.CaptureDispatch
 import com.rawr.camera.architecture.CaptureFilmEvent
+import com.rawr.camera.model.CaptureMode
 import com.rawr.camera.model.CaptureUiState
 import com.rawr.camera.model.ExposureParameter
 import com.rawr.camera.model.FilmSimQuickState
@@ -52,33 +54,15 @@ internal fun CompactViewfinderStrip(
         },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Exactly one render owner is surfaced: Film Sim's preset/look strip
-        // when ON, otherwise the regular tonemap profile/PARAMS strip. Both
-        // share the same strip language and the same bottom slot geometry.
-        // Video mode always shows the tonemap strip (film controls hidden).
-        if (state.filmSimEnabled && filmQuick != null && !forceTonemapStrip) {
-            FilmStrip(
-                quick = filmQuick,
-                onSelectPreset = { onFilmEvent(CaptureFilmEvent.SelectPreset(it)) },
-                onScrubParam = { key, value -> onFilmEvent(CaptureFilmEvent.ScrubNumeric(
-                    com.rawr.camera.settings.model.FilmSimNumericParameter.valueOf(key), value)) },
-                onResetParam = { key -> onFilmEvent(CaptureFilmEvent.ResetNumeric(
-                    com.rawr.camera.settings.model.FilmSimNumericParameter.valueOf(key))) },
-                onScrubDiscrete = { key, index -> onFilmEvent(CaptureFilmEvent.ScrubDiscrete(
-                    com.rawr.camera.settings.model.FilmSimDiscreteField.valueOf(key), index)) },
-                onToggleFlag = { key, enabled -> onFilmEvent(CaptureFilmEvent.SetFlag(
-                    com.rawr.camera.settings.model.FilmSimFlag.valueOf(key), enabled)) },
-                modifier = Modifier.fillMaxWidth()
-            )
-        } else if (!state.filmSimEnabled || forceTonemapStrip) {
-            TonemapStrip(
-                profiles = renderProfiles,
-                state = state,
-                onSelectProfile = onSelectRenderProfile,
-                dispatch = dispatch,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
+        LookStrip(
+            state = state,
+            dispatch = dispatch,
+            forceTonemapStrip = forceTonemapStrip,
+            renderProfiles = renderProfiles,
+            onSelectRenderProfile = onSelectRenderProfile,
+            filmQuick = filmQuick,
+            onFilmEvent = onFilmEvent
+        )
         CompactParamRow(
             state = state,
             dispatch = dispatch,
@@ -88,7 +72,12 @@ internal fun CompactViewfinderStrip(
 }
 
 @Composable
-internal fun CompactParamRow(state: CaptureUiState, dispatch: CaptureDispatch, modifier: Modifier = Modifier) {
+internal fun CompactParamRow(
+    state: CaptureUiState,
+    dispatch: CaptureDispatch,
+    modifier: Modifier = Modifier,
+    trailing: @Composable RowScope.() -> Unit = {}
+) {
     Row(
         modifier
             .fillMaxWidth()
@@ -97,9 +86,58 @@ internal fun CompactParamRow(state: CaptureUiState, dispatch: CaptureDispatch, m
             .testTag(CaptureTestTags.COMPACT_PARAM_ROW),
         horizontalArrangement = Arrangement.spacedBy(CaptureDimens.ControlGap)
     ) {
+        // Video exposure runs on shutter angle, so the photo mode chip would only mislead there.
+        if (state.captureMode == CaptureMode.Photo) {
+            CompactModeChip(state, dispatch, Modifier.weight(.95f).fillMaxHeight())
+        }
         CompactWbButton(state, dispatch, Modifier.weight(1.3f).fillMaxHeight())
         CompactExposureButton(ExposureParameter.Shutter, state, dispatch, Modifier.weight(1f).fillMaxHeight())
         CompactExposureButton(ExposureParameter.Iso, state, dispatch, Modifier.weight(1f).fillMaxHeight())
         CompactExposureButton(ExposureParameter.Ev, state, dispatch, Modifier.weight(1f).fillMaxHeight())
+        CompactFocusChip(state, dispatch, Modifier.weight(.85f).fillMaxHeight())
+        trailing()
+    }
+}
+
+/**
+ * The render owner's strip: Film Sim's preset/look strip when ON, otherwise the regular tonemap profile/PARAMS
+ * strip. Both share the same strip language and bottom slot geometry. Video always shows the tonemap strip.
+ */
+@Composable
+internal fun LookStrip(
+    state: CaptureUiState,
+    dispatch: CaptureDispatch,
+    forceTonemapStrip: Boolean,
+    renderProfiles: RenderProfileQuickState,
+    onSelectRenderProfile: (com.rawr.camera.model.RenderProfileSelection) -> Unit,
+    filmQuick: FilmSimQuickState?,
+    onFilmEvent: (CaptureFilmEvent) -> Unit,
+    modifier: Modifier = Modifier,
+    startExpanded: Boolean = false
+) {
+    if (state.filmSimEnabled && filmQuick != null && !forceTonemapStrip) {
+        FilmStrip(
+            quick = filmQuick,
+            onSelectPreset = { onFilmEvent(CaptureFilmEvent.SelectPreset(it)) },
+            onScrubParam = { key, value -> onFilmEvent(CaptureFilmEvent.ScrubNumeric(
+                com.rawr.camera.settings.model.FilmSimNumericParameter.valueOf(key), value)) },
+            onResetParam = { key -> onFilmEvent(CaptureFilmEvent.ResetNumeric(
+                com.rawr.camera.settings.model.FilmSimNumericParameter.valueOf(key))) },
+            onScrubDiscrete = { key, index -> onFilmEvent(CaptureFilmEvent.ScrubDiscrete(
+                com.rawr.camera.settings.model.FilmSimDiscreteField.valueOf(key), index)) },
+            onToggleFlag = { key, enabled -> onFilmEvent(CaptureFilmEvent.SetFlag(
+                com.rawr.camera.settings.model.FilmSimFlag.valueOf(key), enabled)) },
+            modifier = modifier.fillMaxWidth(),
+            startExpanded = startExpanded
+        )
+    } else if (!state.filmSimEnabled || forceTonemapStrip) {
+        TonemapStrip(
+            profiles = renderProfiles,
+            state = state,
+            onSelectProfile = onSelectRenderProfile,
+            dispatch = dispatch,
+            modifier = modifier.fillMaxWidth(),
+            startExpanded = startExpanded
+        )
     }
 }

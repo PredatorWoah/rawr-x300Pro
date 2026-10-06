@@ -101,12 +101,44 @@ void testStatsSeparateChannels() {
     assert(rawContentStatsLine(empty, input).find("error=invalid_source") != std::string::npos);
 }
 
+// A left-bright, right-dark scene: the grid must show the same framing, and a zoomed crop of it must look different.
+void testBrightnessGridShowsFraming() {
+    const uint32_t w = 16, h = 8;
+    std::vector<uint16_t> raw(w * h);
+    for (uint32_t y = 0; y < h; ++y)
+        for (uint32_t x = 0; x < w; ++x) {
+            const bool green = ((x ^ y) & 1u) != 0;  // RGGB: greens sit where x and y differ in parity
+            const uint16_t level = x < w / 2 ? 800 : 200;
+            raw[y * w + x] = green ? level : 100;
+        }
+    RawPixelSource source{reinterpret_cast<const uint8_t*>(raw.data()), RawPixelFormat::Raw16, w, h,
+                          w * sizeof(uint16_t)};
+    RawContentStatsInput input;
+    input.cfa = 0;
+    input.quadStep = 1;
+
+    // Off by default: nothing extra in the log line.
+    assert(rawContentStatsLine(source, input).find("grid=") == std::string::npos);
+
+    input.gridColumns = 4;
+    input.gridRows = 2;
+    const std::string line = rawContentStatsLine(source, input);
+    assert(line.find("grid=4x2:[800,800,200,200,800,800,200,200]") != std::string::npos);
+
+    // Absurd grid sizes are clamped rather than blowing up the log.
+    input.gridColumns = 1000;
+    input.gridRows = 1000;
+    const std::string big = rawContentStatsLine(source, input);
+    assert(big.find("grid=64x64:[") != std::string::npos);
+}
+
 }  // namespace
 
 int main() {
     testRaw10Unpack();
     testPackedCopyHonoursStride();
     testStatsSeparateChannels();
+    testBrightnessGridShowsFraming();
     std::cout << "raw_pixel_source_test passed\n";
     return 0;
 }

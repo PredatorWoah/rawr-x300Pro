@@ -59,9 +59,12 @@ internal fun TonemapStrip(
     state: CaptureUiState,
     onSelectProfile: (com.rawr.camera.model.RenderProfileSelection) -> Unit,
     dispatch: CaptureDispatch,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    startExpanded: Boolean = false
 ) {
-    var mode by remember(profiles.log) { mutableStateOf(TonemapStripMode.Collapsed) }
+    var mode by remember(profiles.log) {
+        mutableStateOf(if (startExpanded) TonemapStripMode.Profiles else TonemapStripMode.Collapsed)
+    }
     val profileLabel = profiles.options.firstOrNull { it.id == profiles.selectedId }?.label ?: "RAWR NTRL"
     val modified = !profiles.log && TonemapCatalog.tone.any { !TonemapCatalog.isDefault(state, requireNotNull(it.param)) }
     Column(
