@@ -115,9 +115,11 @@ void testProfileMatching() {
     m = matchBuiltInProfile(props({{"ro.product.model", "V2514"}}));
     assert(m.profileId == "vivo_x300_pro" && m.rule == "model" && m.verified);
     const auto& pro = builtInCameraProfile("vivo_x300_pro");
-    assert(pro.lenses.size() == 4);
+    assert(pro.lenses.size() == 3);
     assert(routeForLens(pro, "UW")->cameraId == "4" && routeForLens(pro, "1x")->cameraId == "2");
-    assert(routeForLens(pro, "3.5x")->cameraId == "3" && routeForLens(pro, "8x")->cameraId == "5");
+    assert(routeForLens(pro, "3.5x")->cameraId == "3");
+    // Camera 5 is the same telephoto sensor as camera 3, so it is not offered as a fourth lens.
+    assert(!routeForLens(pro, "8x"));
     // Other phones (X200 Ultra) and missing properties get generic.
     m = matchBuiltInProfile(props({{"ro.product.model", "V2454A"}, {"ro.vivo.product.model", "PD2454"}}));
     assert(m.profileId == "generic" && m.rule == "none" && !m.verified);

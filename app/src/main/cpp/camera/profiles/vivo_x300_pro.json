@@ -73,27 +73,6 @@
         "white": 0
       },
       "keys": []
-    },
-    {
-      "id": "8x",
-      "cameraId": "5",
-      "physicalCameraId": "",
-      "stream": {
-        "format": "RAW16",
-        "width": 4080,
-        "height": 3072
-      },
-      "levels": {
-        "static": false,
-        "black": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "white": 0
-      },
-      "keys": []
     }
   ]
 }

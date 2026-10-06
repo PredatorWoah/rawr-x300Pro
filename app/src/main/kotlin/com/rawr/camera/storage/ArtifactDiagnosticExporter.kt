@@ -124,6 +124,8 @@ class ArtifactDiagnosticExporter(private val context: Context) {
         // Testers on other devices usually have no adb, so the bundle carries
         // this process's own logcat (readable without any permission).
         val logcat = ownLogcat()
+        // What each camera advertises, including full-resolution RAW tables and vendor keys.
+        val capabilities = runCatching { CameraCapabilityReport.build(context) }.getOrNull()
         if (present.isEmpty() && logcat == null) return null
         val zip = File.createTempFile("rawr-diagnostics-", ".zip", context.cacheDir)
         try {
@@ -131,6 +133,12 @@ class ArtifactDiagnosticExporter(private val context: Context) {
                 for (file in present) {
                     z.putNextEntry(java.util.zip.ZipEntry(file.name))
                     file.inputStream().buffered().use { it.copyTo(z) }
+                    z.closeEntry()
+                }
+                if (capabilities != null) {
+                    z.putNextEntry(java.util.zip.ZipEntry("camera_capabilities.txt"))
+                    z.write(deviceHeader().toByteArray())
+                    z.write(capabilities.toByteArray())
                     z.closeEntry()
                 }
                 if (logcat != null) {
