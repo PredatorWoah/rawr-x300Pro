@@ -106,7 +106,7 @@ internal object CameraCapabilityReport {
                 null -> "null"
                 is Array<*>, is IntArray, is LongArray, is FloatArray, is DoubleArray, is ByteArray,
                 is ShortArray, is BooleanArray, is CharArray ->
-                    java.util.Arrays.deepToString(arrayOf(value)).removeSurrounding("[", "]")
+                    java.util.Arrays.deepToString(arrayOf<Any?>(value)).removeSurrounding("[", "]")
                 else -> value.toString()
             }
         return if (text.length > 400) text.take(400) + "..." else text
