@@ -296,8 +296,8 @@ Java_com_rawr_camera_integration_NativePreviewEngine_setCameraProfile(JNIEnv* en
     return rawrcam::session::setCameraProfile(handle(h), jString(env, json)) ? JNI_TRUE : JNI_FALSE;
 }
 extern "C" JNIEXPORT jboolean JNICALL Java_com_rawr_camera_integration_NativePreviewEngine_startSensorModeScan(
-    JNIEnv*, jobject, jlong h, jint first, jint last, jint dwellMs) {
-    return rawrcam::session::startSensorModeScan(handle(h), first, last, dwellMs) ? JNI_TRUE : JNI_FALSE;
+    JNIEnv*, jobject, jlong h, jint first, jint last, jint dwellMs, jint mode) {
+    return rawrcam::session::startSensorModeScan(handle(h), first, last, dwellMs, mode) ? JNI_TRUE : JNI_FALSE;
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_rawr_camera_integration_NativePreviewEngine_sensorModeScanActive(JNIEnv*, jobject, jlong h) {

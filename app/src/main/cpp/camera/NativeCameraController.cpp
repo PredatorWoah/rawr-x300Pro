@@ -1,6 +1,7 @@
 #include "camera/NativeCameraController.h"
 
 #include <android/log.h>
+#include <camera/NdkCameraMetadata.h>
 #include <camera/NdkCameraMetadataTags.h>
 #include <sys/system_properties.h>
 
@@ -23,6 +24,7 @@
 #include "camera/CameraResultProcessor.h"
 #include "camera/CameraWhiteBalanceControls.h"
 #include "camera/SoftwareAe.h"
+#include "camera/vivo/VivoVendorTags.h"
 #include "geometry/OrientationTransform.h"
 #include "metadata/MetadataDiagnostics.h"
 
@@ -97,6 +99,7 @@ struct NativeCameraController::Impl final : CameraEventSink {
     std::atomic<bool> scanActive{false};
     std::atomic<bool> scanStop{false};
     std::atomic<int> scanFrames{0};
+    std::atomic<bool> scanTrialLogged{false};
     std::thread scanThread;
     bool previousModeWasAuto_ = false;
     mutable std::mutex mutex;
@@ -446,53 +449,127 @@ struct NativeCameraController::Impl final : CameraEventSink {
         if (scanThread.joinable() && scanThread.get_id() != std::this_thread::get_id()) scanThread.join();
     }
 
-    // Starts the scan of vendor sensor modes [first, last] on the running lens, dwelling dwellMs on each. Returns
-    // false when one is already running or the camera is not.
-    bool startSensorModeScan(int first, int last, int dwellMs) {
+    struct ScanTrial {
+        std::string label;
+        std::vector<CameraKeySetting> keys;
+    };
+
+    static CameraKeySetting scanKey(const std::string& tag, CameraKeySetting::Type type, CameraKeySetting::Scope scope,
+                                    std::vector<double> values) {
+        CameraKeySetting key;
+        key.tag = tag;
+        key.type = type;
+        key.scope = scope;
+        key.values = std::move(values);
+        return key;
+    }
+
+    // mode: 0 steps vendor.control.forceSensorMode through [first, last]; 1 probes zoom, crop and full-resolution keys
+    // (first/last unused). Returns false when the camera is not running or a scan is already under way.
+    bool startSensorModeScan(int first, int last, int dwellMs, int mode = 0) {
         {
             std::lock_guard<std::mutex> lock(mutex);
-            if (!active || shutDown || last < first) return false;
+            if (!active || shutDown || (mode == 0 && last < first)) return false;
         }
         if (scanActive.exchange(true)) return false;
         if (scanThread.joinable()) scanThread.join();  // A finished scan's thread.
         scanStop.store(false, std::memory_order_relaxed);
-        scanThread = std::thread([this, first, last, dwellMs] { runSensorModeScan(first, last, dwellMs); });
+        scanThread = std::thread([this, first, last, dwellMs, mode] { runScan(first, last, dwellMs, mode); });
         return true;
     }
 
-    void runSensorModeScan(int first, int last, int dwellMs) {
-        constexpr const char* kKey = "vivo.control.forceSensorMode";
+    std::vector<ScanTrial> buildProbeTrials(const metadata::SensorGeometry& g) {
+        using T = CameraKeySetting::Type;
+        using S = CameraKeySetting::Scope;
+        std::vector<ScanTrial> out;
+        out.push_back({"baseline", {}});
+        const int aw = g.activeArray.valid ? g.activeArray.right - g.activeArray.left : 0;
+        const int ah = g.activeArray.valid ? g.activeArray.bottom - g.activeArray.top : 0;
+        const std::string stdZoom = std::to_string(static_cast<uint32_t>(ACAMERA_CONTROL_ZOOM_RATIO));
+        const std::string stdCrop = std::to_string(static_cast<uint32_t>(ACAMERA_SCALER_CROP_REGION));
+        for (const int z : {2, 4}) {
+            const std::string zs = std::to_string(z);
+            out.push_back({"zoomRatio_std_" + zs, {scanKey(stdZoom, T::Float, S::Request, {static_cast<double>(z)})}});
+            out.push_back({"zoom_ratio_vivo_" + zs,
+                           {scanKey("vivo.control.zoom_ratio", T::Float, S::Request, {static_cast<double>(z)})}});
+            if (aw > 0 && ah > 0) {
+                const int w = aw / z, h = ah / z;
+                const int x = g.activeArray.left + (aw - w) / 2, y = g.activeArray.top + (ah - h) / 2;
+                out.push_back({"cropRegion_" + zs, {scanKey(stdCrop, T::Int32, S::Request, {double(x), double(y), double(w), double(h)})}});
+                out.push_back({"cropRegion_insensor_" + zs,
+                               {scanKey(stdCrop, T::Int32, S::Request, {double(x), double(y), double(w), double(h)}),
+                                scanKey("com.mediatek.insensorzoomfeature.insensorzoomIsInternalAP", T::Int32, S::Request, {1})}});
+            }
+            out.push_back({"zoomRatio_std_insensor_" + zs,
+                           {scanKey(stdZoom, T::Float, S::Request, {static_cast<double>(z)}),
+                            scanKey("com.mediatek.insensorzoomfeature.insensorzoomIsInternalAP", T::Int32, S::Request, {1})}});
+        }
+        const char* const flags[] = {"vivo.control.ultra_highresolution", "vivo.control.advance_fullsize",
+                                     "vivo.control.EngineerRemosaicMode", "com.mediatek.control.capture.remosaicenable",
+                                     "vivo.control.ai_highresolution"};
+        for (const char* f : flags) {
+            const std::string name = f;
+            for (const T type : {T::Int32, T::Byte}) {
+                const std::string tn = type == T::Int32 ? "i32" : "u8";
+                out.push_back({name + "_session_" + tn, {scanKey(name, type, S::Session, {1})}});
+                out.push_back({name + "_request_" + tn, {scanKey(name, type, S::Request, {1})}});
+            }
+        }
+        // Full-res flag plus a 2x crop, in case the flag only matters once the sensor is asked for a window.
+        if (aw > 0 && ah > 0) {
+            const int w = aw / 2, h = ah / 2;
+            const int x = g.activeArray.left + (aw - w) / 2, y = g.activeArray.top + (ah - h) / 2;
+            out.push_back({"ultra_highresolution_request_i32_crop2",
+                           {scanKey("vivo.control.ultra_highresolution", T::Int32, S::Request, {1}),
+                            scanKey(stdCrop, T::Int32, S::Request, {double(x), double(y), double(w), double(h)})}});
+        }
+        return out;
+    }
+
+    void runScan(int first, int last, int dwellMs, int mode) {
         CameraProfile original;
         std::string scanLens;
+        std::vector<ScanTrial> trials;
         {
             std::lock_guard<std::mutex> lock(mutex);
             original = profile;
             scanLens = lensId;
+            if (mode == 0) {
+                for (int m = first; m <= last; ++m) {
+                    trials.push_back({std::to_string(m), {scanKey("vivo.control.forceSensorMode",
+                                                                     CameraKeySetting::Type::Int32,
+                                                                     CameraKeySetting::Scope::Session,
+                                                                     {static_cast<double>(m)})}});
+                }
+            } else if (deviceSession.cameraContext()) {
+                trials = buildProbeTrials(deviceSession.cameraContext()->geometry);
+            }
         }
-        diag("SENSOR_MODE_SCAN_BEGIN lens=" + scanLens + " first=" + std::to_string(first) +
-             " last=" + std::to_string(last) + " dwellMs=" + std::to_string(dwellMs));
-        for (int mode = first; mode <= last && !scanStop.load(std::memory_order_relaxed); ++mode) {
+        diag("SENSOR_MODE_SCAN_BEGIN kind=" + std::string(mode == 0 ? "sensorMode" : "cropProbe") + " lens=" + scanLens +
+             " trials=" + std::to_string(trials.size()) + " dwellMs=" + std::to_string(dwellMs));
+        for (size_t index = 0; index < trials.size() && !scanStop.load(std::memory_order_relaxed); ++index) {
+            const ScanTrial& trial = trials[index];
+            // Mode scans keep the numeric mode as the id so existing tooling keeps working.
+            const std::string id = mode == 0 ? trial.label : std::to_string(index);
             CameraProfile modified = original;
             bool found = false;
             for (auto& lens : modified.lenses) {
                 if (lens.lensId != scanLens) continue;
                 found = true;
-                lens.keys.erase(std::remove_if(lens.keys.begin(), lens.keys.end(),
-                                               [&](const CameraKeySetting& k) { return k.tag == kKey; }),
-                                lens.keys.end());
-                CameraKeySetting key;
-                key.tag = kKey;
-                key.type = CameraKeySetting::Type::Int32;
-                key.scope = CameraKeySetting::Scope::Session;
-                key.values = {static_cast<double>(mode)};
-                lens.keys.push_back(std::move(key));
+                for (const auto& add : trial.keys) {
+                    lens.keys.erase(std::remove_if(lens.keys.begin(), lens.keys.end(),
+                                                   [&](const CameraKeySetting& k) { return k.tag == add.tag; }),
+                                    lens.keys.end());
+                    lens.keys.push_back(add);
+                }
             }
             if (!found) {
                 diag("SENSOR_MODE_SCAN_ABORT reason=lens_not_in_profile lens=" + scanLens);
                 break;
             }
             scanFrames.store(0, std::memory_order_relaxed);
-            diag("SENSOR_MODE_SCAN_MODE_BEGIN mode=" + std::to_string(mode) + " lens=" + scanLens);
+            scanTrialLogged.store(false, std::memory_order_relaxed);
+            diag("SENSOR_MODE_SCAN_MODE_BEGIN mode=" + id + " label=" + trial.label + " lens=" + scanLens);
             setProfile(std::move(modified), true);
             bool restartNeeded = false;
             {
@@ -515,8 +592,8 @@ struct NativeCameraController::Impl final : CameraEventSink {
                 std::lock_guard<std::mutex> lock(mutex);
                 running = active && deviceSession.session() != nullptr;
             }
-            diag("SENSOR_MODE_SCAN_MODE_END mode=" + std::to_string(mode) + " started=" + (running ? "true" : "false") +
-                 " frames=" + std::to_string(scanFrames.load(std::memory_order_relaxed)));
+            diag("SENSOR_MODE_SCAN_MODE_END mode=" + id + " label=" + trial.label + " started=" +
+                 (running ? "true" : "false") + " frames=" + std::to_string(scanFrames.load(std::memory_order_relaxed)));
         }
         // Put the lens back exactly as it was.
         setProfile(std::move(original), true);
@@ -529,6 +606,35 @@ struct NativeCameraController::Impl final : CameraEventSink {
         }
         diag("SENSOR_MODE_SCAN_DONE lens=" + scanLens);
         scanActive.store(false, std::memory_order_relaxed);
+    }
+
+    // One line per trial, once the camera has settled: what the HAL says it actually did with the request.
+    void logScanResult(const ACameraMetadata* result) {
+        std::ostringstream line;
+        line << "SENSOR_MODE_SCAN_RESULT frames=" << scanFrames.load(std::memory_order_relaxed);
+        auto dump = [&](const char* name, uint32_t tag) {
+            ACameraMetadata_const_entry e{};
+            if (ACameraMetadata_getConstEntry(result, tag, &e) != ACAMERA_OK) return;
+            line << ' ' << name << '=';
+            for (uint32_t i = 0; i < e.count && i < 8; ++i) {
+                if (i) line << ',';
+                switch (e.type) {
+                    case ACAMERA_TYPE_INT32: line << e.data.i32[i]; break;
+                    case ACAMERA_TYPE_BYTE: line << int(e.data.u8[i]); break;
+                    case ACAMERA_TYPE_FLOAT: line << e.data.f[i]; break;
+                    case ACAMERA_TYPE_INT64: line << e.data.i64[i]; break;
+                    default: line << '?'; break;
+                }
+            }
+        };
+        dump("scalerCrop", ACAMERA_SCALER_CROP_REGION);
+        dump("zoomRatio", ACAMERA_CONTROL_ZOOM_RATIO);
+        for (const char* name : {"vivo.feedback.SensorCropRegion", "vivo.feedback.appliedCropRegion",
+                                 "vivo.control.zoom_ratio", "vivo.control.sensorMode"}) {
+            std::string error;
+            if (const auto tag = vivo::resolveMetadataTagByNameCompat(result, name, &error)) dump(name, *tag);
+        }
+        diag(line.str());
     }
 
     void shutdown() {
@@ -583,7 +689,11 @@ struct NativeCameraController::Impl final : CameraEventSink {
         // Validate before decoding a request's borrowed provenance pointer.
         if (!active || callbackGeneration != deviceSession.generation() || !deviceSession.cameraContext() || !result)
             return;
-        if (scanActive.load(std::memory_order_relaxed)) scanFrames.fetch_add(1, std::memory_order_relaxed);
+        if (scanActive.load(std::memory_order_relaxed) &&
+            scanFrames.fetch_add(1, std::memory_order_relaxed) + 1 >= 12 &&
+            !scanTrialLogged.exchange(true, std::memory_order_relaxed)) {
+            logScanResult(result);
+        }
         auto actions = results.process(requestCopy, result, control, deviceSession.cameraContext(),
                                        deviceSession.staticLevels(), deviceSession.sensorModeOverridden(),
                                        requests.latestSubmittedSerial());
@@ -1031,8 +1141,8 @@ int NativeCameraController::videoRotationDegrees(int deviceRotationDegrees) cons
         impl_->deviceSession.cameraContext()->lensFacing == ACAMERA_LENS_FACING_FRONT);
 }
 bool NativeCameraController::setExposureMode(ExposureControlMode mode) { return impl_->setExposureModeValue(mode); }
-bool NativeCameraController::startSensorModeScan(int first, int last, int dwellMs) {
-    return impl_->startSensorModeScan(first, last, dwellMs);
+bool NativeCameraController::startSensorModeScan(int first, int last, int dwellMs, int mode) {
+    return impl_->startSensorModeScan(first, last, dwellMs, mode);
 }
 bool NativeCameraController::sensorModeScanActive() const noexcept {
     return impl_->scanActive.load(std::memory_order_relaxed);

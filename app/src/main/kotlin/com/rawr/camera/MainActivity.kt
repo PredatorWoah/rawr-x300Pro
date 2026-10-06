@@ -232,19 +232,32 @@ class MainActivity : ComponentActivity() {
             com.rawr.camera.settings.ui.SENSOR_SCAN_PREFS,
             MODE_PRIVATE
         )
-        if (!prefs.getBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false)) return
+        val probe = prefs.getBoolean(com.rawr.camera.settings.ui.SENSOR_PROBE_REQUESTED, false)
+        if (!probe && !prefs.getBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false)) return
         lifecycleScope.launch {
             delay(3000)
             if (!started || generation != startGeneration) return@launch
-            prefs.edit().putBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false).apply()
+            prefs.edit()
+                .putBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false)
+                .putBoolean(com.rawr.camera.settings.ui.SENSOR_PROBE_REQUESTED, false)
+                .apply()
             val coordinator = captureViewModel.previewCoordinator
-            if (!coordinator.startSensorModeScan(0, 40, 3500)) {
+            val launched = if (probe) {
+                coordinator.startSensorModeScan(0, 0, 4000, mode = 1)
+            } else {
+                coordinator.startSensorModeScan(0, 40, 3500)
+            }
+            if (!launched) {
                 Toast.makeText(this@MainActivity, "Sensor mode scan could not start", Toast.LENGTH_LONG).show()
                 return@launch
             }
             Toast.makeText(
                 this@MainActivity,
-                "Scanning sensor modes 0 to 40. Keep the phone still on a detailed scene (about 2.5 minutes).",
+                if (probe) {
+                    "Probing zoom, crop and full-res keys. Keep the phone still on a detailed scene (about 2 minutes)."
+                } else {
+                    "Scanning sensor modes 0 to 40. Keep the phone still on a detailed scene (about 2.5 minutes)."
+                },
                 Toast.LENGTH_LONG
             ).show()
             while (coordinator.sensorModeScanActive()) delay(1000)

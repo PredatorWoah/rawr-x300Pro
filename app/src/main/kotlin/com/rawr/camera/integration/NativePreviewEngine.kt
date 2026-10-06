@@ -55,7 +55,7 @@ class NativePreviewEngine {
     external fun setCameraProfile(handle: Long, json: String): Boolean
 
     /** Debug: steps the vendor sensor-mode key through [first, last] on the running lens, then restores it. */
-    external fun startSensorModeScan(handle: Long, first: Int, last: Int, dwellMs: Int): Boolean
+    external fun startSensorModeScan(handle: Long, first: Int, last: Int, dwellMs: Int, mode: Int): Boolean
 
     external fun sensorModeScanActive(handle: Long): Boolean
 
