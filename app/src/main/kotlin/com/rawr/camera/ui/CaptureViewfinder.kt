@@ -213,6 +213,8 @@ internal fun ViewfinderBottomSlot(
             // rails + AMSI/SHD-HL are hidden and replaced by focus mode
             // buttons + MF rail. Same slot, same heights, no overlay.
             FocusBottomControls(state, dispatch, Modifier.fillMaxWidth())
+        } else if (!forceCompact && state.captureLayout == CaptureControlLayout.Pro) {
+            ProViewfinderOverlay(state, dispatch, Modifier.fillMaxWidth())
         } else if (!forceCompact && state.captureLayout == CaptureControlLayout.Simple) {
             SimpleViewfinderDeck(
                 state,
