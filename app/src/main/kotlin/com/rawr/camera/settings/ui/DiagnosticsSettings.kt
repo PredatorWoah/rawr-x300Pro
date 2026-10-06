@@ -190,6 +190,32 @@ internal fun DebugSettings(
             )
             SettingDivider()
             SettingsRow(
+                title = "Full-resolution test, Java Camera2 (runs now)",
+                value = "About 1 minute",
+                onClick = {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Running. Stay on this screen for about a minute.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                    val main = android.os.Handler(android.os.Looper.getMainLooper())
+                    Thread {
+                        // The capture screen releases the camera when Settings opens; give it a moment.
+                        Thread.sleep(1500)
+                        val report = com.rawr.camera.storage.FullResJavaProbe.run(context.applicationContext)
+                        val accepted = report.lines().count { it.contains("result=image") }
+                        main.post {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Finished: $accepted capture(s) succeeded. Export the Diagnostics Bundle.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }.start()
+                }
+            )
+            SettingDivider()
+            SettingsRow(
                 title = "Full-resolution capture test on next camera open",
                 value = "About 1 minute",
                 onClick = {
