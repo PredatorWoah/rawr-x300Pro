@@ -25,9 +25,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rawr.camera.architecture.CaptureDispatch
+import com.rawr.camera.architecture.CloseFocusSelector
+import com.rawr.camera.architecture.OpenFocusSelector
 import com.rawr.camera.architecture.SetExposureMode
 import com.rawr.camera.model.CaptureUiState
 import com.rawr.camera.model.ExposureMode
+import com.rawr.camera.model.FocusMode
 import com.rawr.camera.model.chipLabel
 import com.rawr.camera.model.nextExposureMode
 
@@ -83,6 +86,72 @@ internal fun CompactModeChip(state: CaptureUiState, dispatch: CaptureDispatch, m
             )
             Text(
                 "MODE",
+                color = if (engaged) CaptureColors.Accent else Color.White.copy(alpha = .62f),
+                fontFamily = CaptureMono,
+                fontWeight = FontWeight.Bold,
+                fontSize = 8.sp,
+                lineHeight = 10.sp,
+                letterSpacing = .4.sp,
+                maxLines = 1,
+                style = ViewfinderTextStyle
+            )
+        }
+    }
+}
+
+/**
+ * Shows the focus mode (AF, AF LOCK, MF) and opens the focus controls on tap. Those controls, the mode buttons and the
+ * manual focus rail, were reachable only by long-pressing the preview, so most people never found manual focus.
+ */
+@Composable
+internal fun CompactFocusChip(state: CaptureUiState, dispatch: CaptureDispatch, modifier: Modifier = Modifier) {
+    val haptics = LocalCaptureHaptics.current
+    val mode = state.focus.mode
+    val latestSelectorOpen by rememberUpdatedState(state.focus.selectorOpen)
+    val label =
+        when (mode) {
+            FocusMode.Af -> "AF"
+            FocusMode.AfLock -> "AF LOCK"
+            FocusMode.Mf -> "MF"
+        }
+    val engaged = mode != FocusMode.Af
+    fun toggle() {
+        haptics.selection()
+        dispatch(if (latestSelectorOpen) CloseFocusSelector else OpenFocusSelector)
+    }
+    Box(
+        modifier
+            .testTag(CaptureTestTags.COMPACT_FOCUS)
+            .systemGestureExclusion()
+            .pointerInput(Unit) { detectTapGestures(onTap = { toggle() }) }
+            .semantics {
+                role = Role.Button
+                contentDescription = "Focus mode $label. Tap to open focus controls."
+                onClick {
+                    toggle()
+                    true
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        ) {
+            Text(
+                label,
+                color = if (engaged) CaptureColors.AccentSoft else Color.White.copy(alpha = .95f),
+                fontFamily = CaptureMono,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = ViewfinderTextStyle
+            )
+            Text(
+                "FOCUS",
                 color = if (engaged) CaptureColors.Accent else Color.White.copy(alpha = .62f),
                 fontFamily = CaptureMono,
                 fontWeight = FontWeight.Bold,

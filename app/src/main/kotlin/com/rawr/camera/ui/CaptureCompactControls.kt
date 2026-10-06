@@ -106,5 +106,6 @@ internal fun CompactParamRow(state: CaptureUiState, dispatch: CaptureDispatch, m
         CompactExposureButton(ExposureParameter.Shutter, state, dispatch, Modifier.weight(1f).fillMaxHeight())
         CompactExposureButton(ExposureParameter.Iso, state, dispatch, Modifier.weight(1f).fillMaxHeight())
         CompactExposureButton(ExposureParameter.Ev, state, dispatch, Modifier.weight(1f).fillMaxHeight())
+        CompactFocusChip(state, dispatch, Modifier.weight(.85f).fillMaxHeight())
     }
 }
