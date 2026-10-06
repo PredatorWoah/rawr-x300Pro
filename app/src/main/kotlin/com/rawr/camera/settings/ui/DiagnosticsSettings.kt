@@ -188,6 +188,64 @@ internal fun DebugSettings(
                     ).show()
                 }
             )
+            SettingDivider()
+            SettingsRow(
+                title = "Full-resolution test, Java Camera2 (runs now)",
+                value = "About 1 minute",
+                onClick = {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Running. Stay on this screen for about a minute.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                    val main = android.os.Handler(android.os.Looper.getMainLooper())
+                    Thread {
+                        // The capture screen releases the camera when Settings opens; give it a moment.
+                        Thread.sleep(1500)
+                        val report = com.rawr.camera.storage.FullResJavaProbe.run(context.applicationContext)
+                        val accepted = report.lines().count { it.contains("result=image") }
+                        main.post {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Finished: $accepted capture(s) succeeded. Export the Diagnostics Bundle.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }.start()
+                }
+            )
+            SettingDivider()
+            SettingsRow(
+                title = "Full-resolution capture test on next camera open",
+                value = "About 1 minute",
+                onClick = {
+                    context.getSharedPreferences(SENSOR_SCAN_PREFS, android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(SENSOR_FULLRES_REQUESTED, true)
+                        .apply()
+                    android.widget.Toast.makeText(
+                        context,
+                        "Test queued. Go back to the camera, pick the lens to test and hold the phone still.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+            SettingDivider()
+            SettingsRow(
+                title = "Probe zoom, crop and full-res keys on next camera open",
+                value = "About 2 minutes",
+                onClick = {
+                    context.getSharedPreferences(SENSOR_SCAN_PREFS, android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(SENSOR_PROBE_REQUESTED, true)
+                        .apply()
+                    android.widget.Toast.makeText(
+                        context,
+                        "Probe queued. Go back to the camera, pick the lens to test, keep the phone still on a detailed scene.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
         }
     }
 }
@@ -195,3 +253,5 @@ internal fun DebugSettings(
 /** One-shot request flag for the debug sensor mode scan, consumed by the capture screen. */
 const val SENSOR_SCAN_PREFS = "debug_sensor_scan"
 const val SENSOR_SCAN_REQUESTED = "scan_requested"
+const val SENSOR_PROBE_REQUESTED = "probe_requested"
+const val SENSOR_FULLRES_REQUESTED = "fullres_requested"

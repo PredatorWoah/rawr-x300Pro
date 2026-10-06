@@ -50,7 +50,9 @@ class NativeCameraController {
     [[nodiscard]] bool wantsExposureMeter() const noexcept;
     // Debug: steps vendor.control.forceSensorMode through [first, last] on the running lens, logging each value, then
     // restores the lens. Returns false if the camera is not running or a scan is already under way.
-    bool startSensorModeScan(int first, int last, int dwellMs);
+    // mode 1 ignores [first, last] and probes zoom, crop and full-resolution keys instead; mode 2 runs the
+    // full-resolution capture test (hands the camera to FullResProbe, then restores the live session).
+    bool startSensorModeScan(int first, int last, int dwellMs, int mode = 0);
     [[nodiscard]] bool sensorModeScanActive() const noexcept;
     void submitExposureMeter(int64_t exposureTimeNs, int32_t sensitivity, float lumaP50, float lumaP95,
                              float clippedFraction);

@@ -57,10 +57,10 @@ void selectLens(EngineHandle h, const std::string& v) noexcept {
 bool setCameraProfile(EngineHandle h, const std::string& json) noexcept {
     return h && engine(h)->cameraControls().setCameraProfile(json);
 }
-bool startSensorModeScan(EngineHandle h, int first, int last, int dwellMs) noexcept {
+bool startSensorModeScan(EngineHandle h, int first, int last, int dwellMs, int mode) noexcept {
     if (!h) return false;
     auto* camera = engine(h)->cameraControls().controller();
-    return camera && camera->startSensorModeScan(first, last, dwellMs);
+    return camera && camera->startSensorModeScan(first, last, dwellMs, mode);
 }
 bool sensorModeScanActive(EngineHandle h) noexcept {
     if (!h) return false;

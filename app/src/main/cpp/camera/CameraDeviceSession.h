@@ -52,6 +52,8 @@ class CameraDeviceSession final {
     // True when profile session keys changed the sensor readout, so reported
     // sensitivity no longer maps 1:1 onto requested sensitivity.
     bool sensorModeOverridden() const noexcept { return sessionKeysApplied_; }
+    // Probe only: a request key the HAL refuses is skipped (and logged) instead of failing the start.
+    void setLenientRequestKeys(bool lenient) noexcept { lenientRequestKeys_ = lenient; }
 
    private:
     void releaseRequestOutputs(bool orphan) noexcept;
@@ -72,6 +74,7 @@ class CameraDeviceSession final {
     metadata::CameraContextMetadataPtr cameraContext_;
     std::optional<LevelOverride> staticLevels_;
     bool sessionKeysApplied_ = false;
+    bool lenientRequestKeys_ = false;
     uint64_t generation_ = 0, readerGeneration_ = 0, closeGeneration_ = 0;
     bool closePending_ = false, forcedRetire_ = false;
     std::condition_variable closed_;
