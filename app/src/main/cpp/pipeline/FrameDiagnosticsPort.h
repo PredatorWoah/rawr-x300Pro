@@ -40,6 +40,9 @@ class FrameDiagnosticsPort {
     // Software shutter/ISO priority: true while the camera needs rendered-frame brightness, so the (otherwise
     // disabled) GPU measurement is recorded. exposureMeter() then receives each measured frame.
     virtual bool exposureMeterWanted() = 0;
+    // True while a sensor mode scan runs: the periodic RAW stats line then also carries a coarse brightness grid and
+    // is emitted more often, so the framing of each scanned mode can be measured from the log.
+    virtual bool statsGridWanted() = 0;
     virtual void exposureMeter(const rawrcam::metadata::FrameMetadataSnapshot& metadata,
                                const RenderedFeedback& rendered) = 0;
     virtual bool overlayNeedsRawState() = 0;

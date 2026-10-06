@@ -26,6 +26,7 @@ class SessionFrameCallbacks final : public pipeline::FrameLifecyclePort,
     void retireScopesSlot(std::uint32_t slotIndex) override;
     std::optional<RenderedFeedback> consumeExposureFeedback(std::uint32_t slotIndex) override;
     bool exposureMeterWanted() override;
+    bool statsGridWanted() override;
     void exposureMeter(const rawrcam::metadata::FrameMetadataSnapshot& metadata,
                        const RenderedFeedback& rendered) override;
     bool overlayNeedsRawState() override;

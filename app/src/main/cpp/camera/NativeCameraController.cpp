@@ -92,6 +92,12 @@ struct NativeCameraController::Impl final : CameraEventSink {
     // whether to spend GPU time measuring the rendered frame.
     SoftwareAe softAe;
     std::atomic<bool> meterWanted{false};
+    // Sensor mode scan (debug): steps a vendor sensor-mode key through a range on the running lens and logs what each
+    // value does. The thread restarts the camera through setProfile, so everything it touches is the normal path.
+    std::atomic<bool> scanActive{false};
+    std::atomic<bool> scanStop{false};
+    std::atomic<int> scanFrames{0};
+    std::thread scanThread;
     bool previousModeWasAuto_ = false;
     mutable std::mutex mutex;
     // Bounded retire for worker-driven stop/start-failure paths. Healthy
@@ -127,6 +133,8 @@ struct NativeCameraController::Impl final : CameraEventSink {
     }
 
     void setActive(bool value) {
+        // Leaving the screen must end a scan instead of letting it reopen the camera in the background.
+        if (!value) scanStop.store(true, std::memory_order_relaxed);
         std::unique_lock<std::mutex> lock(mutex);
         if (active == value) return;
         active = value;
@@ -148,6 +156,7 @@ struct NativeCameraController::Impl final : CameraEventSink {
     void setLens(const std::string& value) {
         std::unique_lock<std::mutex> lock(mutex);
         if (lensId == value) return;
+        scanStop.store(true, std::memory_order_relaxed);  // The scan is bound to the lens it started on.
 
         const bool restart = active;
         if (!restart) {
@@ -180,8 +189,12 @@ struct NativeCameraController::Impl final : CameraEventSink {
 
     // Replaces the lens profile. Restarts the camera only when the running
     // lens's route actually changed (or the lens is gone).
-    bool setProfile(CameraProfile next) {
+    bool setProfile(CameraProfile next, bool fromScan = false) {
         std::unique_lock<std::mutex> lock(mutex);
+        if (scanActive.load(std::memory_order_relaxed) && !fromScan) {
+            diag("CAMERA_PROFILE_USER_IGNORED reason=sensor_mode_scan profile=" + profile.id);
+            return true;
+        }
         if (!profileIdFromSetprop().empty()) {
             diag("CAMERA_PROFILE_USER_IGNORED reason=setprop_override profile=" + profile.id);
             return false;
@@ -428,7 +441,98 @@ struct NativeCameraController::Impl final : CameraEventSink {
         lock.lock();
     }
 
+    void joinScan() {
+        scanStop.store(true, std::memory_order_relaxed);
+        if (scanThread.joinable() && scanThread.get_id() != std::this_thread::get_id()) scanThread.join();
+    }
+
+    // Starts the scan of vendor sensor modes [first, last] on the running lens, dwelling dwellMs on each. Returns
+    // false when one is already running or the camera is not.
+    bool startSensorModeScan(int first, int last, int dwellMs) {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (!active || shutDown || last < first) return false;
+        }
+        if (scanActive.exchange(true)) return false;
+        if (scanThread.joinable()) scanThread.join();  // A finished scan's thread.
+        scanStop.store(false, std::memory_order_relaxed);
+        scanThread = std::thread([this, first, last, dwellMs] { runSensorModeScan(first, last, dwellMs); });
+        return true;
+    }
+
+    void runSensorModeScan(int first, int last, int dwellMs) {
+        constexpr const char* kKey = "vivo.control.forceSensorMode";
+        CameraProfile original;
+        std::string scanLens;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            original = profile;
+            scanLens = lensId;
+        }
+        diag("SENSOR_MODE_SCAN_BEGIN lens=" + scanLens + " first=" + std::to_string(first) +
+             " last=" + std::to_string(last) + " dwellMs=" + std::to_string(dwellMs));
+        for (int mode = first; mode <= last && !scanStop.load(std::memory_order_relaxed); ++mode) {
+            CameraProfile modified = original;
+            bool found = false;
+            for (auto& lens : modified.lenses) {
+                if (lens.lensId != scanLens) continue;
+                found = true;
+                lens.keys.erase(std::remove_if(lens.keys.begin(), lens.keys.end(),
+                                               [&](const CameraKeySetting& k) { return k.tag == kKey; }),
+                                lens.keys.end());
+                CameraKeySetting key;
+                key.tag = kKey;
+                key.type = CameraKeySetting::Type::Int32;
+                key.scope = CameraKeySetting::Scope::Session;
+                key.values = {static_cast<double>(mode)};
+                lens.keys.push_back(std::move(key));
+            }
+            if (!found) {
+                diag("SENSOR_MODE_SCAN_ABORT reason=lens_not_in_profile lens=" + scanLens);
+                break;
+            }
+            scanFrames.store(0, std::memory_order_relaxed);
+            diag("SENSOR_MODE_SCAN_MODE_BEGIN mode=" + std::to_string(mode) + " lens=" + scanLens);
+            setProfile(std::move(modified), true);
+            bool restartNeeded = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                restartNeeded = !active && !shutDown;
+            }
+            // A value the HAL rejects rolls the start back and leaves the camera inactive; bring it back for the next.
+            if (restartNeeded && !scanStop.load(std::memory_order_relaxed)) {
+                std::unique_lock<std::mutex> lock(mutex);
+                if (!active && !shutDown) {
+                    active = true;
+                    startLocked(lock);
+                }
+            }
+            for (int waited = 0; waited < dwellMs && !scanStop.load(std::memory_order_relaxed); waited += 100) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            bool running = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                running = active && deviceSession.session() != nullptr;
+            }
+            diag("SENSOR_MODE_SCAN_MODE_END mode=" + std::to_string(mode) + " started=" + (running ? "true" : "false") +
+                 " frames=" + std::to_string(scanFrames.load(std::memory_order_relaxed)));
+        }
+        // Put the lens back exactly as it was.
+        setProfile(std::move(original), true);
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            if (!active && !shutDown && !scanStop.load(std::memory_order_relaxed)) {
+                active = true;
+                startLocked(lock);
+            }
+        }
+        diag("SENSOR_MODE_SCAN_DONE lens=" + scanLens);
+        scanActive.store(false, std::memory_order_relaxed);
+    }
+
     void shutdown() {
+        scanStop.store(true, std::memory_order_relaxed);
         std::unique_lock<std::mutex> lock(mutex);
         if (shutDown) return;
         shutDown = true;
@@ -479,6 +583,7 @@ struct NativeCameraController::Impl final : CameraEventSink {
         // Validate before decoding a request's borrowed provenance pointer.
         if (!active || callbackGeneration != deviceSession.generation() || !deviceSession.cameraContext() || !result)
             return;
+        if (scanActive.load(std::memory_order_relaxed)) scanFrames.fetch_add(1, std::memory_order_relaxed);
         auto actions = results.process(requestCopy, result, control, deviceSession.cameraContext(),
                                        deviceSession.staticLevels(), deviceSession.sensorModeOverridden(),
                                        requests.latestSubmittedSerial());
@@ -897,7 +1002,9 @@ struct NativeCameraController::Impl final : CameraEventSink {
 
 NativeCameraController::NativeCameraController(PreviewCallbacks callbacks)
     : impl_(std::make_unique<Impl>(std::move(callbacks))) {}
-NativeCameraController::~NativeCameraController() = default;
+NativeCameraController::~NativeCameraController() {
+    if (impl_) impl_->joinScan();
+}
 void NativeCameraController::setActive(bool active) { impl_->setActive(active); }
 void NativeCameraController::setLensId(const std::string& lensId) { impl_->setLens(lensId); }
 const CameraProfile& deviceBuiltInCameraProfile() { return builtInCameraProfile(activeProfileId(deviceProfileMatch())); }
@@ -924,6 +1031,12 @@ int NativeCameraController::videoRotationDegrees(int deviceRotationDegrees) cons
         impl_->deviceSession.cameraContext()->lensFacing == ACAMERA_LENS_FACING_FRONT);
 }
 bool NativeCameraController::setExposureMode(ExposureControlMode mode) { return impl_->setExposureModeValue(mode); }
+bool NativeCameraController::startSensorModeScan(int first, int last, int dwellMs) {
+    return impl_->startSensorModeScan(first, last, dwellMs);
+}
+bool NativeCameraController::sensorModeScanActive() const noexcept {
+    return impl_->scanActive.load(std::memory_order_relaxed);
+}
 void NativeCameraController::submitExposureMeter(int64_t exposureTimeNs, int32_t sensitivity, float lumaP50,
                                                  float lumaP95, float clippedFraction) {
     impl_->submitExposureMeter(exposureTimeNs, sensitivity, lumaP50, lumaP95, clippedFraction);

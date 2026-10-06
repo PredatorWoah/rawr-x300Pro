@@ -1,3 +1,4 @@
+#include "camera/NativeCameraController.h"
 #include "capture/CaptureRequest.h"
 // SessionEngine C-API forwards (SessionEngineApi.h).
 // Split from SessionEngine.cpp; pure code motion.
@@ -55,6 +56,16 @@ void selectLens(EngineHandle h, const std::string& v) noexcept {
 }
 bool setCameraProfile(EngineHandle h, const std::string& json) noexcept {
     return h && engine(h)->cameraControls().setCameraProfile(json);
+}
+bool startSensorModeScan(EngineHandle h, int first, int last, int dwellMs) noexcept {
+    if (!h) return false;
+    auto* camera = engine(h)->cameraControls().controller();
+    return camera && camera->startSensorModeScan(first, last, dwellMs);
+}
+bool sensorModeScanActive(EngineHandle h) noexcept {
+    if (!h) return false;
+    const auto* camera = engine(h)->cameraControls().controller();
+    return camera && camera->sensorModeScanActive();
 }
 void setPreferredCameraId(EngineHandle h, const std::string& v) noexcept {
     if (h) engine(h)->cameraControls().setPreferredCameraId(v);

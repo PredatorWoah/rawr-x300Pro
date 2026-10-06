@@ -226,12 +226,43 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Debug: a queued sensor-mode scan runs once the camera is up. The user watches nothing; the result is in the log.
+    private fun maybeRunSensorModeScan(generation: Long) {
+        val prefs = getSharedPreferences(
+            com.rawr.camera.settings.ui.SENSOR_SCAN_PREFS,
+            MODE_PRIVATE
+        )
+        if (!prefs.getBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false)) return
+        lifecycleScope.launch {
+            delay(3000)
+            if (!started || generation != startGeneration) return@launch
+            prefs.edit().putBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false).apply()
+            val coordinator = captureViewModel.previewCoordinator
+            if (!coordinator.startSensorModeScan(0, 40, 3500)) {
+                Toast.makeText(this@MainActivity, "Sensor mode scan could not start", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            Toast.makeText(
+                this@MainActivity,
+                "Scanning sensor modes 0 to 40. Keep the phone still on a detailed scene (about 2.5 minutes).",
+                Toast.LENGTH_LONG
+            ).show()
+            while (coordinator.sensorModeScanActive()) delay(1000)
+            Toast.makeText(
+                this@MainActivity,
+                "Sensor mode scan finished. Export the Diagnostics Bundle.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         started = true
         // A viewfinder you are only looking at must not time out; onStop clears this.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val generation = ++startGeneration
+        maybeRunSensorModeScan(generation)
         lifecycleScope.launch {
             val renderer = com.rawr.camera.renderer.RendererStore.get(this@MainActivity)
             renderer.awaitReady()

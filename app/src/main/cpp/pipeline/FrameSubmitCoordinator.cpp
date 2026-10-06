@@ -886,15 +886,22 @@ bool FrameSubmitCoordinator::submitAhb(uint64_t timestampNs, AHardwareBuffer* ah
     const bool videoReady = videoOutput_ && videoOutput_->ready() && config_.diagnosticMode == 0u;
     if (!configured_ || ((!swapchainRenderer_.ready() || presentationPaused_) && !videoReady)) return false;
 
+    // Scanning sensor modes wants denser samples and a brightness grid; normal use stays at one plain line a second.
+    const bool statsGrid = diagnosticsPort_.statsGridWanted();
+    const uint64_t statsIntervalNs = statsGrid ? 400'000'000ull : 1'000'000'000ull;
     if (imageLease && metadata.cameraContext &&
         (lastRawContentStatsNs_ == 0 || timestampNs < lastRawContentStatsNs_ ||
-         timestampNs - lastRawContentStatsNs_ >= 1'000'000'000ull)) {
+         timestampNs - lastRawContentStatsNs_ >= statsIntervalNs)) {
         lastRawContentStatsNs_ = timestampNs;
         rawrcam::imaging::RawContentStatsInput statsInput;
         statsInput.cfa = static_cast<int>(metadata.cameraContext->rawPreviewCfa);
         statsInput.blackLevel = *std::min_element(black.begin(), black.end());
         statsInput.whiteLevel = white;
         statsInput.quadStep = 16;
+        if (statsGrid) {
+            statsInput.gridColumns = 16;
+            statsInput.gridRows = 12;
+        }
         const std::string stats = "PREVIEW " +
                                   rawrcam::imaging::sampleRawContentStats(imageLease, ahb, acquireFenceFd, statsInput) +
                                   " frame=" + std::to_string(metadata.frameOrdinal) +

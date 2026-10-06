@@ -69,6 +69,10 @@ bool SessionFrameCallbacks::exposureMeterWanted() {
     const auto* camera = engine_->cameraControls().controller();
     return camera && camera->wantsExposureMeter();
 }
+bool SessionFrameCallbacks::statsGridWanted() {
+    const auto* camera = engine_->cameraControls().controller();
+    return camera && camera->sensorModeScanActive();
+}
 void SessionFrameCallbacks::exposureMeter(const rawrcam::metadata::FrameMetadataSnapshot& metadata,
                                           const RenderedFeedback& rendered) {
     auto* camera = engine_->cameraControls().controller();

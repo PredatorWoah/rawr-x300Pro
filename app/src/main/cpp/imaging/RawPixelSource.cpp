@@ -77,11 +77,25 @@ std::string rawContentStatsLine(const RawPixelSource& source, const RawContentSt
     uint64_t total = 0;
     uint64_t atOrBelowBlack = 0;
     uint64_t atOrAboveWhite = 0;
+    const uint32_t gridCols = std::min(input.gridColumns, 64u);
+    const uint32_t gridRows = std::min(input.gridRows, 64u);
+    const bool wantGrid = gridCols > 0 && gridRows > 0;
+    std::vector<double> gridSum(wantGrid ? static_cast<size_t>(gridCols) * gridRows : 0, 0.0);
+    std::vector<uint32_t> gridCount(gridSum.size(), 0u);
     for (uint32_t qy = 0; qy + 1u < source.height; qy += 2u * step) {
         for (uint32_t qx = 0; qx + 1u < source.width; qx += 2u * step) {
             for (uint32_t i = 0; i < 4u; ++i) {
                 const uint16_t v = readRawPixel(source, qx + (i & 1u), qy + (i >> 1u));
-                samples[static_cast<size_t>(quad[i])].push_back(v);
+                const int channel = quad[i];
+                samples[static_cast<size_t>(channel)].push_back(v);
+                if (wantGrid && (channel == 1 || channel == 2)) {
+                    const uint32_t cx = std::min(gridCols - 1u, static_cast<uint32_t>(
+                        static_cast<uint64_t>(qx) * gridCols / source.width));
+                    const uint32_t cy = std::min(gridRows - 1u, static_cast<uint32_t>(
+                        static_cast<uint64_t>(qy) * gridRows / source.height));
+                    gridSum[static_cast<size_t>(cy) * gridCols + cx] += v;
+                    ++gridCount[static_cast<size_t>(cy) * gridCols + cx];
+                }
                 ++total;
                 if (static_cast<float>(v) <= input.blackLevel) ++atOrBelowBlack;
                 if (static_cast<float>(v) >= input.whiteLevel) ++atOrAboveWhite;
@@ -103,6 +117,14 @@ std::string rawContentStatsLine(const RawPixelSource& source, const RawContentSt
         out << ' ' << kChannelName[c] << "=[min=" << values.front()
             << " mean=" << static_cast<double>(sum) / static_cast<double>(values.size()) << " p50=" << at(0.5)
             << " p99=" << at(0.99) << " max=" << values.back() << ']';
+    }
+    if (wantGrid) {
+        out << " grid=" << gridCols << 'x' << gridRows << ":[";
+        for (size_t i = 0; i < gridSum.size(); ++i) {
+            if (i) out << ',';
+            out << (gridCount[i] ? static_cast<int>(gridSum[i] / gridCount[i] + 0.5) : 0);
+        }
+        out << ']';
     }
     const double denom = total ? static_cast<double>(total) : 1.0;
     out << std::setprecision(4) << " fracAtOrBelowBlack=" << static_cast<double>(atOrBelowBlack) / denom
