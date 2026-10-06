@@ -560,7 +560,8 @@ struct NativeCameraController::Impl final : CameraEventSink {
         SoftwareAe::Limits limits;
         limits.shutterMinNs = c.exposureTimeMinNs;
         limits.shutterMaxNs = c.exposureTimeMaxNs;
-        limits.autoShutterMaxNs = std::min(c.exposureTimeMaxNs, 1'000'000'000LL / std::max(5, control.autoMinFps));
+        limits.autoShutterMaxNs =
+            std::min<int64_t>(c.exposureTimeMaxNs, int64_t{1'000'000'000} / std::max(5, control.autoMinFps));
         limits.sensitivityMin = c.sensitivityMin;
         limits.sensitivityMax = c.sensitivityMax;
         const float evStops =
