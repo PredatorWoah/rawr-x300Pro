@@ -89,7 +89,7 @@ class SettingsModelTest {
         assertEquals("gain.200", v.maxPostGainId)
         assertEquals("fps.12", v.autoMinFpsId)
         // Display.
-        assertEquals(CaptureControlLayout.Compact, v.captureControlLayout)
+        assertEquals(CaptureControlLayout.Pro, v.captureControlLayout)
         assertEquals(ControlSurfaceStyle.Basic, v.controlSurfaceStyle)
         assertEquals(GridMode.Thirds, v.gridMode)
         // Output.
