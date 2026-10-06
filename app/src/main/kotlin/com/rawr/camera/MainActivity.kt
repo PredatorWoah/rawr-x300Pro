@@ -13,7 +13,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.rawr.camera.architecture.TriggerCapture
@@ -184,7 +191,17 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
                 }
             }
+            var galleryOpen by remember { mutableStateOf(false) }
+            var galleryItems by remember { mutableStateOf<List<com.rawr.camera.storage.GalleryItem>>(emptyList()) }
+            LaunchedEffect(galleryOpen) {
+                if (galleryOpen) {
+                    galleryItems = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        com.rawr.camera.storage.GalleryMediaStore(this@MainActivity).listRawrImages()
+                    }
+                }
+            }
             CaptureTheme {
+              Box(Modifier.fillMaxSize()) {
                 CaptureRoute(
                     controller = captureViewModel.controller,
                     previewCoordinator = captureViewModel.previewCoordinator,
@@ -208,7 +225,7 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     latestImageUri = latestGalleryImage,
-                    onOpenLatestImage = { latestGalleryImage?.let(::openGalleryImage) },
+                    onOpenLatestImage = { galleryOpen = true },
                     onOpenRenderer = { startActivity(Intent(this@MainActivity, com.rawr.camera.renderer.RendererActivity::class.java)) },
                     filmQuick = filmSimQuick,
                     onFilmEvent = captureViewModel::onFilmEvent,
@@ -222,7 +239,32 @@ class MainActivity : ComponentActivity() {
                     ),
                     onToggleVideoRecording = ::toggleVideoRecording
                 )
+                if (galleryOpen) {
+                    com.rawr.camera.ui.InAppGallery(
+                        items = galleryItems,
+                        startUri = latestGalleryImage,
+                        onClose = { galleryOpen = false },
+                        onOpenExternal = ::openGalleryImage,
+                        onShare = ::shareGalleryImage
+                    )
+                }
+              }
             }
+        }
+    }
+
+    private fun shareGalleryImage(uri: Uri) {
+        val type = contentResolver.getType(uri) ?: "image/*"
+        val send =
+            Intent(Intent.ACTION_SEND).apply {
+                setType(type)
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        try {
+            startActivity(Intent.createChooser(send, null))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "Nothing to share with", Toast.LENGTH_SHORT).show()
         }
     }
 
