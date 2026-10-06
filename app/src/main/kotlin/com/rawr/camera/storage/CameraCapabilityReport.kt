@@ -63,8 +63,14 @@ internal object CameraCapabilityReport {
         out.appendLine("RAW10 sizes, default: ${sizes(chars, ImageFormat.RAW10, false)}")
         out.appendLine("RAW sensor sizes, maximum resolution: ${sizes(chars, ImageFormat.RAW_SENSOR, true)}")
         out.appendLine("RAW10 sizes, maximum resolution: ${sizes(chars, ImageFormat.RAW10, true)}")
+        out.appendLine("JPEG sizes, default: ${sizes(chars, ImageFormat.JPEG, false)}")
+        out.appendLine("YUV_420_888 sizes, default: ${sizes(chars, ImageFormat.YUV_420_888, false)}")
+        out.appendLine("HEIC sizes, default: ${sizes(chars, ImageFormat.HEIC, false)}")
+        out.appendLine("PRIVATE sizes, default: ${sizes(chars, ImageFormat.PRIVATE, false)}")
         out.appendLine("max resolution YUV/JPEG: ${sizes(chars, ImageFormat.JPEG, true)}")
         out.appendLine("vendor characteristics keys: ${vendor(chars.keys.map { it.name })}")
+        out.appendLine("vendor characteristics values:")
+        vendorValues(chars).forEach { out.appendLine("  $it") }
         out.appendLine("vendor request keys: ${vendor(chars.availableCaptureRequestKeys.map { it.name })}")
         out.appendLine("vendor session keys: ${vendor(chars.availableSessionKeys.orEmpty().map { it.name })}")
         out.appendLine("vendor result keys: ${vendor(chars.availableCaptureResultKeys.map { it.name })}")
@@ -80,6 +86,30 @@ internal object CameraCapabilityReport {
         val map = runCatching { chars.get(key) }.getOrNull() ?: return emptyList()
         val found: Array<Size> = runCatching { map.getOutputSizes(format) }.getOrNull() ?: return emptyList()
         return found.map { "${it.width}x${it.height}" }
+    }
+
+    // The values of the vendor characteristics: sensor sizes, remosaic support, work types and similar facts that the
+    // key names alone do not carry.
+    @Suppress("UNCHECKED_CAST")
+    private fun vendorValues(chars: CameraCharacteristics): List<String> =
+        chars.keys
+            .filterNot { it.name.startsWith("android.") }
+            .sortedBy { it.name }
+            .map { key ->
+                val value = runCatching { chars.get(key as CameraCharacteristics.Key<Any>) }.getOrNull()
+                "${key.name} = ${valueText(value)}"
+            }
+
+    private fun valueText(value: Any?): String {
+        val text =
+            when (value) {
+                null -> "null"
+                is Array<*>, is IntArray, is LongArray, is FloatArray, is DoubleArray, is ByteArray,
+                is ShortArray, is BooleanArray, is CharArray ->
+                    java.util.Arrays.deepToString(arrayOf(value)).removeSurrounding("[", "]")
+                else -> value.toString()
+            }
+        return if (text.length > 400) text.take(400) + "..." else text
     }
 
     // Standard AOSP sections all start with "android."; everything else is vendor-defined.
