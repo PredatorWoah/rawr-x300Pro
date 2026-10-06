@@ -823,7 +823,7 @@ data class SettingsValues(
     val maxPostGainId: String = "gain.200",
     val autoMinFpsId: String = "fps.12",
     val controlSurfaceStyle: ControlSurfaceStyle = ControlSurfaceStyle.Basic,
-    val captureControlLayout: CaptureControlLayout = CaptureControlLayout.Compact,
+    val captureControlLayout: CaptureControlLayout = CaptureControlLayout.Pro,
     val jpegEnabled: Boolean = true,
     val dngEnabled: Boolean = true,
     val dngCompressionId: String = "dng.uncompressed",

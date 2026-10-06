@@ -365,6 +365,9 @@ class SettingsPreferencesRepository(context: Context, private val defaults: Sett
                     34 -> values
                     // v35 -> v36: last used lens; absent means the profile's first lens.
                     35 -> values
+                    // v36 -> v37: the Pro (Gcam style) layout becomes the default; existing installs move once and can
+                    // pick any layout again in Settings, Display.
+                    36 -> values.copy(captureControlLayout = CaptureControlLayout.Pro)
                     else -> {
                         return defaults
                     }
@@ -871,7 +874,7 @@ class SettingsPreferencesRepository(context: Context, private val defaults: Sett
 
     private companion object {
         const val LEGACY_SCHEMA_VERSION = 0
-        const val CURRENT_SCHEMA_VERSION = 36
+        const val CURRENT_SCHEMA_VERSION = 37
     }
 
     private object Keys {
