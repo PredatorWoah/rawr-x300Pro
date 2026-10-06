@@ -190,6 +190,22 @@ internal fun DebugSettings(
             )
             SettingDivider()
             SettingsRow(
+                title = "Full-resolution capture test on next camera open",
+                value = "About 1 minute",
+                onClick = {
+                    context.getSharedPreferences(SENSOR_SCAN_PREFS, android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(SENSOR_FULLRES_REQUESTED, true)
+                        .apply()
+                    android.widget.Toast.makeText(
+                        context,
+                        "Test queued. Go back to the camera, pick the lens to test and hold the phone still.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+            SettingDivider()
+            SettingsRow(
                 title = "Probe zoom, crop and full-res keys on next camera open",
                 value = "About 2 minutes",
                 onClick = {
@@ -212,3 +228,4 @@ internal fun DebugSettings(
 const val SENSOR_SCAN_PREFS = "debug_sensor_scan"
 const val SENSOR_SCAN_REQUESTED = "scan_requested"
 const val SENSOR_PROBE_REQUESTED = "probe_requested"
+const val SENSOR_FULLRES_REQUESTED = "fullres_requested"

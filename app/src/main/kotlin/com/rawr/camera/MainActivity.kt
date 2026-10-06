@@ -233,16 +233,20 @@ class MainActivity : ComponentActivity() {
             MODE_PRIVATE
         )
         val probe = prefs.getBoolean(com.rawr.camera.settings.ui.SENSOR_PROBE_REQUESTED, false)
-        if (!probe && !prefs.getBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false)) return
+        val fullRes = prefs.getBoolean(com.rawr.camera.settings.ui.SENSOR_FULLRES_REQUESTED, false)
+        if (!probe && !fullRes && !prefs.getBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false)) return
         lifecycleScope.launch {
             delay(3000)
             if (!started || generation != startGeneration) return@launch
             prefs.edit()
                 .putBoolean(com.rawr.camera.settings.ui.SENSOR_SCAN_REQUESTED, false)
                 .putBoolean(com.rawr.camera.settings.ui.SENSOR_PROBE_REQUESTED, false)
+                .putBoolean(com.rawr.camera.settings.ui.SENSOR_FULLRES_REQUESTED, false)
                 .apply()
             val coordinator = captureViewModel.previewCoordinator
-            val launched = if (probe) {
+            val launched = if (fullRes) {
+                coordinator.startSensorModeScan(0, 0, 0, mode = 2)
+            } else if (probe) {
                 coordinator.startSensorModeScan(0, 0, 4000, mode = 1)
             } else {
                 coordinator.startSensorModeScan(0, 40, 3500)
@@ -253,7 +257,9 @@ class MainActivity : ComponentActivity() {
             }
             Toast.makeText(
                 this@MainActivity,
-                if (probe) {
+                if (fullRes) {
+                    "Full-resolution test running. The viewfinder goes dark for about a minute. Keep the phone still."
+                } else if (probe) {
                     "Probing zoom, crop and full-res keys. Keep the phone still on a detailed scene (about 2 minutes)."
                 } else {
                     "Scanning sensor modes 0 to 40. Keep the phone still on a detailed scene (about 2.5 minutes)."

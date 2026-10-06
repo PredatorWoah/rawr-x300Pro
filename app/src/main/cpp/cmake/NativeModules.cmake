@@ -120,6 +120,7 @@ rawrcam_module(camera
     camera/CameraControlSurface.cpp
     camera/NativeCameraController.cpp
     camera/CameraDeviceSession.cpp
+    camera/FullResProbe.cpp
     camera/CameraCallbacks.cpp
     camera/CameraRequestPipeline.cpp
     camera/CameraResultProcessor.cpp

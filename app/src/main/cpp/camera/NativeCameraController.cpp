@@ -22,6 +22,7 @@
 #include "camera/CameraProfileJson.h"
 #include "camera/CameraRequestPipeline.h"
 #include "camera/CameraResultProcessor.h"
+#include "camera/FullResProbe.h"
 #include "camera/CameraWhiteBalanceControls.h"
 #include "camera/SoftwareAe.h"
 #include "camera/vivo/VivoVendorTags.h"
@@ -475,7 +476,12 @@ struct NativeCameraController::Impl final : CameraEventSink {
         if (scanActive.exchange(true)) return false;
         if (scanThread.joinable()) scanThread.join();  // A finished scan's thread.
         scanStop.store(false, std::memory_order_relaxed);
-        scanThread = std::thread([this, first, last, dwellMs, mode] { runScan(first, last, dwellMs, mode); });
+        scanThread = std::thread([this, first, last, dwellMs, mode] {
+            if (mode == 2)
+                runFullResScan();
+            else
+                runScan(first, last, dwellMs, mode);
+        });
         return true;
     }
 
@@ -523,6 +529,37 @@ struct NativeCameraController::Impl final : CameraEventSink {
                            {scanKey("vivo.control.ultra_highresolution", T::Int32, S::Request, {1}), crop}});
         }
         return out;
+    }
+
+    // Hands the camera to the full-resolution probe, then brings the live session back.
+    void runFullResScan() {
+        std::string cameraId;
+        int width = 0, height = 0;
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            const auto route = routeForLens(profile, lensId);
+            if (!route || !deviceSession.cameraContext()) {
+                diag("FULLRES_PROBE_END reason=no_route");
+                scanActive.store(false, std::memory_order_relaxed);
+                return;
+            }
+            cameraId = route->cameraId;
+            width = static_cast<int>(deviceSession.cameraContext()->geometry.rawBufferWidth);
+            height = static_cast<int>(deviceSession.cameraContext()->geometry.rawBufferHeight);
+            active = false;
+            if (!retireSessionLocked(lock, kStopRetireTimeout, "CAMERA_FULLRES_PROBE"))
+                forceRetireSessionLocked(lock, "CAMERA_FULLRES_PROBE");
+            teardownCameraResourcesLocked(lock);
+        }
+        runFullResProbe(cameraId, width, height, [this](const std::string& line) { diag(line); });
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            if (!active && !shutDown && !scanStop.load(std::memory_order_relaxed)) {
+                active = true;
+                startLocked(lock);
+            }
+        }
+        scanActive.store(false, std::memory_order_relaxed);
     }
 
     void runScan(int first, int last, int dwellMs, int mode) {
