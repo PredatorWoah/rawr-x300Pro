@@ -487,26 +487,16 @@ struct NativeCameraController::Impl final : CameraEventSink {
         const int ah = g.activeArray.valid ? g.activeArray.bottom - g.activeArray.top : 0;
         const std::string stdZoom = std::to_string(static_cast<uint32_t>(ACAMERA_CONTROL_ZOOM_RATIO));
         const std::string stdCrop = std::to_string(static_cast<uint32_t>(ACAMERA_SCALER_CROP_REGION));
-        for (const int z : {2, 4}) {
-            const std::string zs = std::to_string(z);
-            out.push_back({"zoomRatio_std_" + zs, {scanKey(stdZoom, T::Float, S::Request, {static_cast<double>(z)})}});
-            out.push_back({"zoom_ratio_vivo_" + zs,
-                           {scanKey("vivo.control.zoom_ratio", T::Float, S::Request, {static_cast<double>(z)})}});
-            if (aw > 0 && ah > 0) {
-                const int w = aw / z, h = ah / z;
-                const int x = g.activeArray.left + (aw - w) / 2, y = g.activeArray.top + (ah - h) / 2;
-                out.push_back({"cropRegion_" + zs, {scanKey(stdCrop, T::Int32, S::Request, {double(x), double(y), double(w), double(h)})}});
-                out.push_back({"cropRegion_insensor_" + zs,
-                               {scanKey(stdCrop, T::Int32, S::Request, {double(x), double(y), double(w), double(h)}),
-                                scanKey("com.mediatek.insensorzoomfeature.insensorzoomIsInternalAP", T::Int32, S::Request, {1})}});
-            }
-            out.push_back({"zoomRatio_std_insensor_" + zs,
-                           {scanKey(stdZoom, T::Float, S::Request, {static_cast<double>(z)}),
-                            scanKey("com.mediatek.insensorzoomfeature.insensorzoomIsInternalAP", T::Int32, S::Request, {1})}});
-        }
-        const char* const flags[] = {"vivo.control.ultra_highresolution", "vivo.control.advance_fullsize",
-                                     "vivo.control.EngineerRemosaicMode", "com.mediatek.control.capture.remosaicenable",
-                                     "vivo.control.ai_highresolution"};
+        const char* const flags[] = {"vivo.control.ultra_highresolution",
+                                     "vivo.control.advance_fullsize",
+                                     "vivo.control.EngineerRemosaicMode",
+                                     "com.mediatek.control.capture.remosaicenable",
+                                     "vivo.control.ai_highresolution",
+                                     "vivo.control.seamless.remosaic.enable",
+                                     "vivo.control.seamless.roiRemosaic",
+                                     "vivo.control.raw_capture_type",
+                                     "com.vivo.SensorFullCrop",
+                                     "vivo.parameter.highResolutionDngType"};
         for (const char* f : flags) {
             const std::string name = f;
             for (const T type : {T::Int32, T::Byte}) {
@@ -515,13 +505,21 @@ struct NativeCameraController::Impl final : CameraEventSink {
                 out.push_back({name + "_request_" + tn, {scanKey(name, type, S::Request, {1})}});
             }
         }
-        // Full-res flag plus a 2x crop, in case the flag only matters once the sensor is asked for a window.
+        // Zoom and crop, 2x only: a 4x window is small enough to upset the metadata reader on some HALs.
+        const std::string insensor = "com.mediatek.insensorzoomfeature.insensorzoomIsInternalAP";
+        out.push_back({"zoomRatio_std_2", {scanKey(stdZoom, T::Float, S::Request, {2.0})}});
+        out.push_back({"zoom_ratio_vivo_2", {scanKey("vivo.control.zoom_ratio", T::Float, S::Request, {2.0})}});
+        out.push_back({"zoomRatio_std_insensor_2",
+                       {scanKey(stdZoom, T::Float, S::Request, {2.0}), scanKey(insensor, T::Int32, S::Request, {1})}});
         if (aw > 0 && ah > 0) {
             const int w = aw / 2, h = ah / 2;
             const int x = g.activeArray.left + (aw - w) / 2, y = g.activeArray.top + (ah - h) / 2;
+            const auto crop = scanKey(stdCrop, T::Int32, S::Request, {double(x), double(y), double(w), double(h)});
+            out.push_back({"cropRegion_2", {crop}});
+            out.push_back({"cropRegion_insensor_2", {crop, scanKey(insensor, T::Int32, S::Request, {1})}});
+            // Full-res flag plus a 2x crop, in case the flag only matters once the sensor is asked for a window.
             out.push_back({"ultra_highresolution_request_i32_crop2",
-                           {scanKey("vivo.control.ultra_highresolution", T::Int32, S::Request, {1}),
-                            scanKey(stdCrop, T::Int32, S::Request, {double(x), double(y), double(w), double(h)})}});
+                           {scanKey("vivo.control.ultra_highresolution", T::Int32, S::Request, {1}), crop}});
         }
         return out;
     }
