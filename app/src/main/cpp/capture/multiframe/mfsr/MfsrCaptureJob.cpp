@@ -22,6 +22,7 @@
 #include "capture/multiframe/RzslCaptureWriter.h"
 #include "capture/multiframe/mfsr/MergeProcessor.h"
 #include "capture/persistence/CaptureJob.h"
+#include "capture/persistence/FrameRecipe.h"
 #include "color/ColorMath.h"
 #include "color/FilmExposure.h"
 #include "color/WhiteBalance.h"
@@ -227,8 +228,6 @@ void MfsrCaptureJob::run() {
     std::ostringstream replayMetadata;
     replayMetadata << rawr::raw_gpu_pipeline::serializeReplayNoise(resolvedNoise) << "rawrReferenceIndex\t"
                    << job->referenceIndex << '\n';
-    baseDng.mergeReplayMetadata = replayMetadata.str();
-    mergedDng.mergeReplayMetadata = replayMetadata.str();
     auto dumpRzsl = [&]() {
         if (!dumpRzslRequested || rzslDumpAttempted) return;
         rzslDumpAttempted = true;
@@ -265,6 +264,7 @@ void MfsrCaptureJob::run() {
             baseDng.imageDescription = "Captured with Rawr (multiframe base frame)";
             auto context = std::move(baseDng);
             baseDng.outputFd = -1;
+            rawrcam::capture::persistence::attachFrameRecipes(context, *baseFrame);
             baseStarted = baseWriter.start(baseFrame, std::move(context));
             if (!baseStarted) {
                 failDng(baseDisplayName, "base_dng_start_rejected");
@@ -395,6 +395,7 @@ void MfsrCaptureJob::run() {
                 }
                 auto context = std::move(mergedDng);
                 mergedDng.outputFd = -1;
+                rawrcam::capture::persistence::attachFrameRecipes(context, *mergedFrame);
                 mergedStarted = mergedWriter.start(mergedFrame, std::move(context));
                 if (!mergedStarted) {
                     failDng(mergedDisplayName, "merged_dng_start_rejected");

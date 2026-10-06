@@ -30,16 +30,14 @@ struct DngCaptureContext {
     bool captureFilmEnabled = false;
     std::string processingRecipe;  // Versioned named-field JSON; independent of whether JPEG is requested.
     std::string sourceRole = "single";
-    std::string mergeReplayMetadata;          // Derived from the persisted burst noise/reference state.
     std::string resolvedRecipe;               // Frame-time native settings, preserved for replay.
+    // Per-frame color state for replay, rendered by
+    // capture::persistence::attachFrameRecipes before the writer starts. The
+    // encoder embeds every recipe string verbatim and never parses it.
+    std::string frameRecipe;
     std::string imageDescription;             // frozen human-readable capture/render settings
     std::optional<float> baselineExposureEV;  // DNG render hint; RAW samples are unchanged.
     bool reconstructedGeometry = false;       // merged CFA is a synthesized output grid, not sensor-pixel geometry
-    // Profiled wavelet denoise intent (still-only). The recipe JSON also
-    // carries these; the fields here drive the DNG denoise extension.
-    bool denoiseEnabled = false;
-    float denoiseStrength = 1.0f;
-    float denoiseDetail = 1.0f;
     // DNG payload encoding. LosslessJpeg is the default; Uncompressed keeps
     // the legacy byte layout. Wired to the capture settings UI (follow-up);
     // JNI still constructs the default until then.
