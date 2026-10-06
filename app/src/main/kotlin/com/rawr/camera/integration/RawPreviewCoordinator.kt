@@ -33,8 +33,8 @@ class RawPreviewCoordinator(application: Application) : AutoCloseable {
 
     fun videoStats(): String = native.videoStats(nativeHandle)
 
-    fun startSensorModeScan(first: Int, last: Int, dwellMs: Int): Boolean =
-        synchronized(this) { !closed && native.startSensorModeScan(nativeHandle, first, last, dwellMs) }
+    fun startSensorModeScan(first: Int, last: Int, dwellMs: Int, mode: Int = 0): Boolean =
+        synchronized(this) { !closed && native.startSensorModeScan(nativeHandle, first, last, dwellMs, mode) }
 
     fun sensorModeScanActive(): Boolean = synchronized(this) { !closed && native.sensorModeScanActive(nativeHandle) }
 

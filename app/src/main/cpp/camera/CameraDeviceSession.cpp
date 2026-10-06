@@ -302,8 +302,13 @@ bool CameraDeviceSession::createSession(ANativeWindow* window, const std::option
     if (selected) {
         const auto lensKeys = applyCameraKeySettings(request_, characteristics_, selected->keys,
                                                      CameraKeySetting::Scope::Request, "lens", diag);
-        if (!lensKeys.failures.empty())
-            return fail("lens_request_keys", "lensId=" + selected->lensId + " failed=" + joined(lensKeys.failures));
+        if (!lensKeys.failures.empty()) {
+            // Failing here retires a session that never streamed, which hangs the MediaTek HAL's close. A probe
+            // trying keys of unknown type therefore skips a bad request key instead of aborting the start.
+            if (!lenientRequestKeys_)
+                return fail("lens_request_keys", "lensId=" + selected->lensId + " failed=" + joined(lensKeys.failures));
+            diag("CAMERA_REQUEST_KEYS_SKIPPED lensId=" + selected->lensId + " failed=" + joined(lensKeys.failures));
+        }
     }
     if (!pipeline.submit(session_, request_, callbackContext, control, metering))
         return fail("initial_repeating", "status=control_or_submit_rejected");

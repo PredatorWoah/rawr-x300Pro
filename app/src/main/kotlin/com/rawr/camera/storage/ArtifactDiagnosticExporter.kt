@@ -543,7 +543,8 @@ class ArtifactDiagnosticExporter(private val context: Context) {
                 "rawrcam_dcg_session_audit.jsonl",
                 "rawrcam_post_session_pipeline_audit.jsonl",
                 "rawrcam_frame_audit.jsonl",
-                "rawrcam_internal_runtime_trace.txt"
+                "rawrcam_internal_runtime_trace.txt",
+                FullResJavaProbe.REPORT_FILE
             )
     }
 }
