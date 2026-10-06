@@ -67,7 +67,6 @@ import com.rawr.camera.architecture.SetCaptureMode
 import com.rawr.camera.architecture.ToggleFilmSim
 import com.rawr.camera.architecture.ToggleMultiframe
 import com.rawr.camera.architecture.TriggerCapture
-import com.rawr.camera.model.CaptureControlLayout
 import com.rawr.camera.model.CaptureMode
 import com.rawr.camera.model.CaptureSavePhase
 import com.rawr.camera.model.CaptureUiState
@@ -93,7 +92,7 @@ internal fun CaptureControls(
     // Lens switching and mode switching are disabled while a video recording
     // is active; the native session must not bounce mid-record.
     val recordingLock = isVideo && videoControls.recording
-    if (isVideo || state.captureLayout == CaptureControlLayout.Compact) {
+    if (isVideo || state.captureLayout.usesButtonStrip) {
         // Shared bottom cluster: identical heights and element positions in
         // both modes. The center swaps photo shutter <-> 70dp record button;
         // video sides stay empty (same row height); the mode strip is always
@@ -487,6 +486,16 @@ internal fun Thumbnail(state: CaptureUiState, imageUri: Uri?, onClick: () -> Uni
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
+                )
+            }
+            // A DNG with no embedded preview has nothing to decode; say what it is instead of showing a blank square.
+            if (thumbnail == null && imageUri != null) {
+                androidx.compose.material3.Text(
+                    "DNG",
+                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = .75f),
+                    fontSize = 11.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
         }

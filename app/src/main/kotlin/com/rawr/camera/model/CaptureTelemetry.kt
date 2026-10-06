@@ -18,7 +18,7 @@ data class CaptureMonitorState(
 fun CaptureUiState.monitorProjection() = CaptureMonitorState(
     exposureControl.mode, whiteBalanceTemperatureK, whiteBalanceTint, exposureApplied,
     focus.appliedFocusDiopters, rawFps, viewfinderFps, sensitivityBoost,
-    compactLayout = captureLayout == CaptureControlLayout.Compact,
+    compactLayout = captureLayout.usesButtonStrip,
     videoMode = captureMode == CaptureMode.Video
 )
 

@@ -35,34 +35,30 @@ import com.rawr.camera.model.chipLabel
 import com.rawr.camera.model.nextExposureMode
 
 /**
- * Shows the exposure mode in the compact row and steps through it on tap: Auto, shutter priority, ISO priority,
- * Manual. Compact otherwise has no visible mode at all, only long-press and double-tap gestures on SS and ISO, which
- * are invisible until discovered and silently do nothing on a camera that lacks a mode.
+ * A tappable two-line cell in the compact param row: the current value above, a small title below. Same visual
+ * language as the scrubbable SS / ISO / EV buttons, and accent-coloured while [engaged].
  */
 @Composable
-internal fun CompactModeChip(state: CaptureUiState, dispatch: CaptureDispatch, modifier: Modifier = Modifier) {
-    val haptics = LocalCaptureHaptics.current
-    val mode = state.exposureControl.mode
-    val latestMode by rememberUpdatedState(mode)
-    val latestSupported by rememberUpdatedState(state.capabilities.supportedExposureModes)
-    val engaged = mode != ExposureMode.Auto
-    val label = mode.chipLabel
-    fun step() {
-        val next = nextExposureMode(latestMode, latestSupported)
-        if (next == latestMode) return
-        haptics.selection()
-        dispatch(SetExposureMode(next))
-    }
+internal fun CompactTextChip(
+    value: String,
+    title: String,
+    engaged: Boolean,
+    testTag: String,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val latestOnClick by rememberUpdatedState(onClick)
     Box(
         modifier
-            .testTag(CaptureTestTags.COMPACT_MODE)
+            .testTag(testTag)
             .systemGestureExclusion()
-            .pointerInput(Unit) { detectTapGestures(onTap = { step() }) }
+            .pointerInput(Unit) { detectTapGestures(onTap = { latestOnClick() }) }
             .semantics {
                 role = Role.Button
-                contentDescription = "Exposure mode $label. Tap to change."
+                contentDescription = description
                 onClick {
-                    step()
+                    latestOnClick()
                     true
                 }
             },
@@ -74,7 +70,7 @@ internal fun CompactModeChip(state: CaptureUiState, dispatch: CaptureDispatch, m
             modifier = Modifier.padding(horizontal = 4.dp)
         ) {
             Text(
-                label,
+                value,
                 color = if (engaged) CaptureColors.AccentSoft else Color.White.copy(alpha = .95f),
                 fontFamily = CaptureMono,
                 fontWeight = FontWeight.SemiBold,
@@ -85,7 +81,7 @@ internal fun CompactModeChip(state: CaptureUiState, dispatch: CaptureDispatch, m
                 style = ViewfinderTextStyle
             )
             Text(
-                "MODE",
+                title,
                 color = if (engaged) CaptureColors.Accent else Color.White.copy(alpha = .62f),
                 fontFamily = CaptureMono,
                 fontWeight = FontWeight.Bold,
@@ -97,6 +93,34 @@ internal fun CompactModeChip(state: CaptureUiState, dispatch: CaptureDispatch, m
             )
         }
     }
+}
+
+/**
+ * Shows the exposure mode in the compact row and steps through it on tap: Auto, shutter priority, ISO priority,
+ * Manual. Compact otherwise has no visible mode at all, only long-press and double-tap gestures on SS and ISO, which
+ * are invisible until discovered and silently do nothing on a camera that lacks a mode.
+ */
+@Composable
+internal fun CompactModeChip(state: CaptureUiState, dispatch: CaptureDispatch, modifier: Modifier = Modifier) {
+    val haptics = LocalCaptureHaptics.current
+    val mode = state.exposureControl.mode
+    val latestMode by rememberUpdatedState(mode)
+    val latestSupported by rememberUpdatedState(state.capabilities.supportedExposureModes)
+    CompactTextChip(
+        value = mode.chipLabel,
+        title = "MODE",
+        engaged = mode != ExposureMode.Auto,
+        testTag = CaptureTestTags.COMPACT_MODE,
+        description = "Exposure mode ${mode.chipLabel}. Tap to change.",
+        onClick = {
+            val next = nextExposureMode(latestMode, latestSupported)
+            if (next != latestMode) {
+                haptics.selection()
+                dispatch(SetExposureMode(next))
+            }
+        },
+        modifier = modifier
+    )
 }
 
 /**
@@ -114,53 +138,16 @@ internal fun CompactFocusChip(state: CaptureUiState, dispatch: CaptureDispatch, 
             FocusMode.AfLock -> "AF LOCK"
             FocusMode.Mf -> "MF"
         }
-    val engaged = mode != FocusMode.Af
-    fun toggle() {
-        haptics.selection()
-        dispatch(if (latestSelectorOpen) CloseFocusSelector else OpenFocusSelector)
-    }
-    Box(
-        modifier
-            .testTag(CaptureTestTags.COMPACT_FOCUS)
-            .systemGestureExclusion()
-            .pointerInput(Unit) { detectTapGestures(onTap = { toggle() }) }
-            .semantics {
-                role = Role.Button
-                contentDescription = "Focus mode $label. Tap to open focus controls."
-                onClick {
-                    toggle()
-                    true
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        ) {
-            Text(
-                label,
-                color = if (engaged) CaptureColors.AccentSoft else Color.White.copy(alpha = .95f),
-                fontFamily = CaptureMono,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = ViewfinderTextStyle
-            )
-            Text(
-                "FOCUS",
-                color = if (engaged) CaptureColors.Accent else Color.White.copy(alpha = .62f),
-                fontFamily = CaptureMono,
-                fontWeight = FontWeight.Bold,
-                fontSize = 8.sp,
-                lineHeight = 10.sp,
-                letterSpacing = .4.sp,
-                maxLines = 1,
-                style = ViewfinderTextStyle
-            )
-        }
-    }
+    CompactTextChip(
+        value = label,
+        title = "FOCUS",
+        engaged = mode != FocusMode.Af,
+        testTag = CaptureTestTags.COMPACT_FOCUS,
+        description = "Focus mode $label. Tap to open focus controls.",
+        onClick = {
+            haptics.selection()
+            dispatch(if (latestSelectorOpen) CloseFocusSelector else OpenFocusSelector)
+        },
+        modifier = modifier
+    )
 }

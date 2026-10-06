@@ -67,7 +67,7 @@ internal fun ControlStyleSettings(state: SettingsUiState, dispatch: SettingsDisp
     SettingsPageContainer {
         SettingsGroup(
             title = "Capture Layout",
-            description = "Classic keeps SS/ISO/EV sliders in the viewfinder. Compact moves WB/SS/ISO/EV to scrubbable buttons by the shutter, with multiframe and film sim pills."
+            description = "Classic keeps SS/ISO/EV sliders in the viewfinder. Compact moves WB/SS/ISO/EV to scrubbable buttons by the shutter, with multiframe and film sim pills. Simple keeps the same controls in one rounded bar and hides profiles and film behind a LOOK button."
         ) {
             SettingsSelectionRow(
                 title = "Classic",
@@ -84,6 +84,15 @@ internal fun ControlStyleSettings(state: SettingsUiState, dispatch: SettingsDisp
                 onClick = {
                     haptics.detent()
                     dispatch.invoke(SetCaptureControlLayout(CaptureControlLayout.Compact))
+                }
+            )
+            SettingDivider()
+            SettingsSelectionRow(
+                title = "Simple",
+                selected = state.values.captureControlLayout == CaptureControlLayout.Simple,
+                onClick = {
+                    haptics.detent()
+                    dispatch.invoke(SetCaptureControlLayout(CaptureControlLayout.Simple))
                 }
             )
         }

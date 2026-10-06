@@ -319,7 +319,8 @@ class MainActivity : ComponentActivity() {
     private fun openGalleryImage(uri: Uri) {
         val intent =
             Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "image/jpeg")
+                // A DNG-only shot has no JPEG: ask for whatever type the file really is.
+                setDataAndType(uri, contentResolver.getType(uri) ?: "image/*")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         try {

@@ -11,7 +11,6 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.rawr.camera.architecture.CaptureDispatch
 import com.rawr.camera.architecture.CaptureFilmEvent
-import com.rawr.camera.model.CaptureControlLayout
 import com.rawr.camera.model.CaptureMode
 import com.rawr.camera.model.CaptureUiState
 import com.rawr.camera.model.FilmSimQuickState
@@ -46,14 +45,14 @@ internal fun PhysicalCaptureLayout(
 ) {
     val videoLocked = videoControls.busy || videoControls.recording
     val isVideo = state.captureMode == CaptureMode.Video
-    val compactControls = isVideo || state.captureLayout == CaptureControlLayout.Compact
+    val compactControls = isVideo || state.captureLayout.usesButtonStrip
     // 16:9 viewfinders run past the photo frame and behind the shutter
     // cluster; Open Gate is exactly the photo box, so nothing bleeds.
     val videoBleed = isVideo && state.videoResolution != VideoResolutionMode.OPEN_GATE
     BoxWithConstraints(modifier) {
         // Reserve the shutter/record area and both monitors before sizing the
         // 3:4 viewfinder. A short display must not push the readout below nav.
-        val controlsHeight = if (state.captureLayout == CaptureControlLayout.Compact) {
+        val controlsHeight = if (state.captureLayout.usesButtonStrip) {
             CaptureDimens.CompactVideoControlsMinimumHeight
         } else {
             CaptureDimens.VideoControlsClassicHeight

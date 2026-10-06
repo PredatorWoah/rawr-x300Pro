@@ -213,6 +213,16 @@ internal fun ViewfinderBottomSlot(
             // rails + AMSI/SHD-HL are hidden and replaced by focus mode
             // buttons + MF rail. Same slot, same heights, no overlay.
             FocusBottomControls(state, dispatch, Modifier.fillMaxWidth())
+        } else if (!forceCompact && state.captureLayout == CaptureControlLayout.Simple) {
+            SimpleViewfinderDeck(
+                state,
+                dispatch,
+                renderProfiles = renderProfiles,
+                onSelectRenderProfile = onSelectRenderProfile,
+                filmQuick = filmQuick,
+                onFilmEvent = onFilmEvent,
+                modifier = Modifier.fillMaxWidth()
+            )
         } else if (forceCompact || state.captureLayout == CaptureControlLayout.Compact) {
             // V2: bare WB/SS/ISO/EV strip floats over the preview bottom
             // (scrimmed for legibility). Focus selector still swaps in

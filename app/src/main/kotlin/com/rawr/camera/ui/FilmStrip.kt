@@ -59,9 +59,12 @@ internal fun FilmStrip(
     onResetParam: (String) -> Unit,
     onScrubDiscrete: (String, Int) -> Unit,
     onToggleFlag: (String, Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    startExpanded: Boolean = false
 ) {
-    var mode by remember { mutableStateOf(FilmStripMode.Collapsed) }
+    var mode by remember {
+        mutableStateOf(if (startExpanded && quick.presets.isNotEmpty()) FilmStripMode.Profiles else FilmStripMode.Collapsed)
+    }
     var sectionKey by remember { mutableStateOf(quick.sections.firstOrNull()?.key ?: "film") }
     var subsectionKey by remember { mutableStateOf<String?>(null) }
     // L4 drill into a discrete's option list. Cleared whenever the section
