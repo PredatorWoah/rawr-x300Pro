@@ -1,5 +1,6 @@
 package com.rawr.camera.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -94,6 +95,8 @@ private val ChipShape = RoundedCornerShape(14.dp)
 internal fun ProViewfinderOverlay(state: CaptureUiState, dispatch: CaptureDispatch, modifier: Modifier = Modifier) {
     var target by rememberSaveable { mutableStateOf<ProTarget?>(null) }
     val haptics = LocalCaptureHaptics.current
+    // With a ruler open, Back closes it rather than leaving the app.
+    BackHandler(enabled = target != null) { target = null }
     Column(
         modifier.pointerInput(Unit) {
             // Taps on the controls must not fall through to tap-to-focus.
@@ -543,6 +546,8 @@ private fun SideButton(text: String, active: Boolean, onClick: () -> Unit) {
 /** Dimmed backdrop plus a bottom sheet; tapping the backdrop closes it. */
 @Composable
 internal fun ProSheetFrame(title: String, onClose: () -> Unit, content: @Composable () -> Unit) {
+    // The system back gesture closes the sheet instead of leaving the app.
+    BackHandler(onBack = onClose)
     Box(
         Modifier
             .fillMaxSize()
