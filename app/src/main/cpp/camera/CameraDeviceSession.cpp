@@ -161,19 +161,28 @@ std::optional<LensRoute> CameraDeviceSession::select(const LensRoute& requested,
 CameraControlState CameraDeviceSession::initialControls(const LensRoute& route) const {
     return readInitialCameraControlState(characteristics_, route, generation_);
 }
-bool CameraDeviceSession::open(const LensRoute& route, CameraCallbacks& callbacks, const Diagnostic& diag) {
+bool CameraDeviceSession::open(const LensRoute& route, CameraCallbacks& callbacks, const Diagnostic& diag,
+                               std::unique_lock<std::mutex>& controllerLock,
+                               const std::function<bool()>& stillCurrent) {
     const auto deadline = std::chrono::steady_clock::now() + kOpenBudget;
     {
         std::unique_lock<std::mutex> lock(gPendingCloseMutex);
         if (gPendingCloses > 0) {
             diag("CAMERA_NDK_OPEN_WAIT_CLOSE pending=" + std::to_string(gPendingCloses) +
                  " cameraId=" + route.cameraId);
+            // Device close drains callbacks that also need the controller lock.
+            controllerLock.unlock();
             gPendingCloseCv.wait_until(lock, deadline, [] { return gPendingCloses == 0; });
+            // Never reacquire the controller lock while holding the close lock:
+            // a concurrent teardown takes them in the opposite order.
+            lock.unlock();
+            controllerLock.lock();
         }
     }
 
     auto backoff = kOpenRetryInitial;
     for (int attempt = 1;; ++attempt) {
+        if (!stillCurrent()) return false;
         auto* deviceContext = callbacks.deviceContext(generation_);
         deviceContext_ = deviceContext;
         auto state = CameraCallbacks::deviceState(deviceContext);
@@ -193,7 +202,9 @@ bool CameraDeviceSession::open(const LensRoute& route, CameraCallbacks& callback
         // The HAL can keep reporting the previous camera as in use for a moment after its close returns.
         const bool busy = os == ACAMERA_ERROR_MAX_CAMERA_IN_USE || os == ACAMERA_ERROR_CAMERA_IN_USE;
         if (!busy || std::chrono::steady_clock::now() + backoff >= deadline) return false;
+        controllerLock.unlock();
         std::this_thread::sleep_for(backoff);
+        controllerLock.lock();
         backoff = std::min(backoff * 2, kOpenRetryMax);
     }
 }
