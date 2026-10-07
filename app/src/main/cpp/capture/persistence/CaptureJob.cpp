@@ -1,5 +1,9 @@
 #include "capture/persistence/CaptureJob.h"
 
+#include <chrono>
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 #include <fcntl.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
@@ -49,7 +53,15 @@ struct Reservation {
 void syncFile(const std::string& path, bool directory = false) {
     int fd = open(path.c_str(), O_RDONLY | (directory ? O_DIRECTORY : 0));
     if (fd < 0) throw std::runtime_error("capture_job_sync_open_failed");
+    const auto begin = std::chrono::steady_clock::now();
     int result = fsync(fd);
+#ifdef __ANDROID__
+    __android_log_print(ANDROID_LOG_INFO, "RawrCamNative", "CAPTURE_JOB_FSYNC path=%s directory=%d ms=%.1f result=%d",
+        path.c_str(), directory ? 1 : 0,
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count(), result);
+#else
+    (void)begin;
+#endif
     close(fd);
     if (result != 0) throw std::runtime_error("capture_job_sync_failed");
 }
@@ -199,9 +211,10 @@ struct Reader {
             throw std::runtime_error("capture_job_tonemap_schema_mismatch");
         }
     }
-    // Merge algorithm, HDR+ strength and tile size were appended to
-    // MultiframeTuning without a journal bump; older jobs carry a shorter
-    // prefix (88 bytes: Wronski only, 96: before the tile size).
+    // Merge algorithm, HDR+ strength, tile size and the bracket fields were
+    // appended to MultiframeTuning without a journal bump; older jobs carry a
+    // shorter prefix (88 bytes: Wronski only, 96: before the tile size, 100:
+    // before the bracket fields).
     void one(multiframe::MultiframeTuning& v) {
         constexpr uint32_t kPrefixBytes = 2u * sizeof(uint32_t) + 20u * sizeof(float);
         static_assert(offsetof(multiframe::MultiframeTuning, mergeAlgorithm) == kPrefixBytes,
@@ -211,7 +224,10 @@ struct Reader {
         constexpr uint32_t kBeforeTileBytes = kPrefixBytes + 2u * sizeof(uint32_t);
         static_assert(offsetof(multiframe::MultiframeTuning, hdrplusTileSize) == kBeforeTileBytes,
                       "MultiframeTuning journal tile-size layout");
-        if (n != sizeof(v) && n != kPrefixBytes && n != kBeforeTileBytes)
+        constexpr uint32_t kBeforeBracketBytes = kBeforeTileBytes + sizeof(uint32_t);
+        static_assert(offsetof(multiframe::MultiframeTuning, bracketEv) == kBeforeBracketBytes,
+                      "MultiframeTuning journal bracket layout");
+        if (n != sizeof(v) && n != kPrefixBytes && n != kBeforeTileBytes && n != kBeforeBracketBytes)
             throw std::runtime_error("capture_job_tuning_schema_mismatch");
         v = {};
         bytes(&v, n);

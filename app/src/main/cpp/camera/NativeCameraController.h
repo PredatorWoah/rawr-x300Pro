@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "camera/CameraControlTypes.h"
 #include "camera/CameraRouting.h"
@@ -47,6 +48,17 @@ class NativeCameraController {
     bool setExposureMode(ExposureControlMode mode);
     void setManualExposureTimeNs(int64_t exposureTimeNs);
     void setManualSensitivity(int32_t sensitivity);
+    // HDR+ bracketed: submits one AE-off frame per evOffsets entry (each <= 0)
+    // relative to a delivered frame's CaptureResult exposure/sensitivity,
+    // tagged with requestId. The repeating request is untouched. False when
+    // nothing was submitted (no session, no manual exposure support, unknown
+    // sensitivity coordinate).
+    bool captureExposureBracket(uint64_t requestId, int64_t baseExposureTimeNs, int32_t baseReportedSensitivity,
+                                const std::vector<float>& evOffsets);
+    // Runs DCG ISO calibration during startup, before exposing the viewfinder.
+    // Enabling it on an uncalibrated live session restarts that session.
+    // Off unless HDR+ Bracketed is selected; never probes during video.
+    void setSensitivityCalibrationWanted(bool wanted);
     void setExposureCompensationSteps(int32_t steps);
     // White balance. setWhiteBalanceMode returns false when the requested
     // preset/manual mode is not advertised (caller keeps previous UI state;

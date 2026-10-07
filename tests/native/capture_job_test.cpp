@@ -35,6 +35,7 @@ int main(int argc, char** argv) {
     j.frame.metadata.sensorNoiseProfile = {.001, .00002};
     j.frame.metadata.lensShadingMap = {1, 2, 3, 4};
     j.frame.metadata.requestedSensitivity = 3200;
+    j.frame.metadata.suppressPreview = true;  // Transient startup state must not survive recovery.
     j.frame.colorState.source = "frozen";
     j.frame.colorState.baselineWbRggb = {2, 1, 1, 3};
     j.dng.outputFd = 123;
@@ -61,15 +62,18 @@ int main(int argc, char** argv) {
     j.jpeg.develop.multiframeChromaDenoise = true;
     j.dng.compression = rawrcam::encoding::dng::DngCompression::Uncompressed;
     j.mergedDng.compression = rawrcam::encoding::dng::DngCompression::Uncompressed;
-    j.tuning.mergeAlgorithm = 1;
+    j.tuning.mergeAlgorithm = 3;
     j.tuning.hdrplusStrength = 18.0f;
     j.tuning.hdrplusTileSize = 16;
+    j.tuning.bracketEv = -3.5f;
+    j.tuning.bracketFrames = 4;
     auto path = jobPath(root, j.dng.displayName);
     save(path, j);
     auto restored = load(path);
     assert(restored.frame.raw16 == j.frame.raw16);
     assert(restored.frame.metadata.cameraContext->lensDistortion == camera->lensDistortion);
     assert(restored.frame.metadata.requestedSensitivity == 3200);
+    assert(!restored.frame.metadata.suppressPreview);
     assert(restored.frame.metadata.lensShadingMap == j.frame.metadata.lensShadingMap);
     assert(restored.frame.colorState.source == "frozen");
     assert(restored.dng.outputFd == -1 && restored.jpeg.output.outputFd == -1);
@@ -87,8 +91,9 @@ int main(int argc, char** argv) {
     // v8: DNG compression survives the journal (multiframe DNGs honour "Uncompressed").
     assert(restored.dng.compression == rawrcam::encoding::dng::DngCompression::Uncompressed);
     assert(restored.mergedDng.compression == rawrcam::encoding::dng::DngCompression::Uncompressed);
-    assert(restored.tuning.mergeAlgorithm == 1 && restored.tuning.hdrplusStrength == 18.0f &&
-           restored.tuning.hdrplusTileSize == 16);
+    assert(restored.tuning.mergeAlgorithm == 3 && restored.tuning.hdrplusStrength == 18.0f &&
+           restored.tuning.hdrplusTileSize == 16 && restored.tuning.bracketEv == -3.5f &&
+           restored.tuning.bracketFrames == 4);
     markFilmFallback(path);
     assert(std::filesystem::exists(path + ".fallback"));
     assert(load(path).dng.processingRecipe == j.dng.processingRecipe);

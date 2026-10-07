@@ -60,6 +60,8 @@ enum class ShaderId : std::uint32_t {
     HdrqBorder,
     HdrqAccumulate,
     HdrqShiftTable,
+    HdrqHighlightsNorm,
+    HdrqNormalize,
     Count
 };
 struct ImageBinding {

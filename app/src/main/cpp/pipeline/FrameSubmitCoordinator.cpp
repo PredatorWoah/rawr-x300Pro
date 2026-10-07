@@ -216,6 +216,19 @@ bool FrameSubmitCoordinator::submitMatchedFrame(rawrcam::imaging::MatchedFrame& 
     auto& meta = matched.metadata;
     const uint64_t timestampNs = matched.timestampNs;
 
+    // Calibration and its transition frames must never reach presentation,
+    // scopes, the ZSL ring, or a pending single-frame capture. The camera has
+    // already consumed their results for ISO calibration. Keep the previous
+    // displayed image and release each camera buffer/fence without importing it.
+    if (meta.snapshot.suppressPreview ||
+        meta.snapshot.optimizedStillRequestId == metadata::kSensitivityProbeRequestId) {
+        if (image.acquireFenceFd >= 0) close(image.acquireFenceFd);
+        image.acquireFenceFd = -1;
+        if (image.image) AImage_delete(image.image);
+        image.image = nullptr;
+        return false;
+    }
+
     auto applyCpuSnapshotFence = [&](int gpuAcquireFenceFd, const char* failureTag) -> bool {
         if (gpuAcquireFenceFd == -2) {
             lifecyclePort_.postDiagnostic(std::string(failureTag) + " timestampNs=" + std::to_string(timestampNs));
@@ -460,7 +473,7 @@ void FrameSubmitCoordinator::submitSplitVideoAndMonitor(const SubmitParams& para
     }
     frame.noiseProfileValid = rawrcam::develop::rendered::resolveDenoiseNoise(metadata, frame.noiseA, frame.noiseB);
     auto tone = tonemapParams_;
-    tone.aePostGain = lifecyclePort_.postGainFor(metadata);
+    tone.aePostGain = previewPostGain(metadata);
     const auto cameraToAp1 = RawDevelopRecorder::composeCameraToAp1(params.sensorToSrgb);
 
     // The first submission waits for the camera buffer and the encoder image
@@ -645,7 +658,7 @@ FrameSubmitCoordinator::RecordedSubmit FrameSubmitCoordinator::recordSubmitComma
     }
 
     auto frameTonemapParams = tonemapParams_;
-    frameTonemapParams.aePostGain = lifecyclePort_.postGainFor(metadata);
+    frameTonemapParams.aePostGain = previewPostGain(metadata);
     trace.record(rawrcam::diagnostics::RuntimeTraceStage::PostGain, params.timestampNs, metadata.frameOrdinal,
                  static_cast<int32_t>(slotIndex), metadata.exposureTimeNs, metadata.sensitivity, 0,
                  static_cast<int64_t>(std::llround(frameTonemapParams.aePostGain * 1000000.0f)));
@@ -897,6 +910,21 @@ void FrameSubmitCoordinator::recoverFailedSubmit(uint32_t slotIndex, bool slotSe
     }
 
     performanceTracker_.recordDropped();
+}
+
+float FrameSubmitCoordinator::previewPostGain(const rawrcam::metadata::FrameMetadataSnapshot& metadata) {
+    const float gain = lifecyclePort_.postGainFor(metadata);
+    const double exposure = double(metadata.exposureTimeNs) * double(metadata.sensitivity);
+    if (!(exposure > 0.0)) return gain;
+    if (!metadata.optimizedStillRequestId || *metadata.optimizedStillRequestId == 0) {
+        lastRepeatingExposure_ = exposure;
+        return gain;
+    }
+    if (lastRepeatingExposure_ <= 0.0) return gain;
+    // Interior-ISO calibration probes can also be brighter than preview.
+    // Compensate in both directions without changing the repeating seed.
+    // Same 16x ceiling the tonemap engine enforces.
+    return std::min(16.0f, gain * float(lastRepeatingExposure_ / exposure));
 }
 
 bool FrameSubmitCoordinator::submitAhb(uint64_t timestampNs, AHardwareBuffer* ahb, int acquireFenceFd,

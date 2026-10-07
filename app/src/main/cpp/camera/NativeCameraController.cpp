@@ -20,6 +20,7 @@
 #include "camera/CameraProfileJson.h"
 #include "camera/CameraRequestPipeline.h"
 #include "camera/CameraResultProcessor.h"
+#include "camera/SensitivityProbeStartup.h"
 #include "camera/CameraWhiteBalanceControls.h"
 #include "geometry/OrientationTransform.h"
 #include "metadata/MetadataDiagnostics.h"
@@ -215,6 +216,84 @@ struct NativeCameraController::Impl final : CameraEventSink {
         return route;
     }
 
+    bool captureExposureBracket(uint64_t requestId, int64_t baseExposureTimeNs, int32_t baseReportedSensitivity,
+                                const std::vector<float>& evOffsets) {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!deviceSession.hasSession() || !deviceSession.request() || !control.capabilities.manualExposureSupported ||
+            baseExposureTimeNs <= 0 || baseReportedSensitivity <= 0 || evOffsets.empty()) {
+            diag("CAMERA_BRACKET_REJECTED session=" + std::to_string(deviceSession.hasSession() ? 1 : 0) +
+                 " manual=" + std::to_string(control.capabilities.manualExposureSupported ? 1 : 0));
+            return false;
+        }
+        // CaptureResult ISO -> request coordinate (forced DCG modes report a
+        // different scale; same conversion as the M/I mode seed).
+        int32_t sensitivity = baseReportedSensitivity;
+        if (const auto ratio = results.sensitivityReportedPerRequest(); ratio && *ratio > 0.0) {
+            sensitivity = static_cast<int32_t>(std::llround(baseReportedSensitivity / *ratio));
+        } else if (deviceSession.sensorModeOverridden()) {
+            diag("CAMERA_BRACKET_REJECTED reportedPerRequest=unavailable dcg=on");
+            return false;
+        }
+        const auto& caps = control.capabilities;
+        const int32_t isoMin = caps.sensitivityMin, isoMax = std::max(caps.sensitivityMin, caps.sensitivityMax);
+        const int64_t timeMin = caps.exposureTimeMinNs;
+        // Never longer than the preview frame (motion blur, capture time).
+        const int64_t timeMax = std::max(timeMin, std::min(baseExposureTimeNs, caps.exposureTimeMaxNs));
+        std::vector<CameraRequestPipeline::BracketExposure> exposures;
+        for (const float ev : evOffsets) {
+            // Lower gain first, down to base ISO: at high ISO highlights clip
+            // in the gain stage, so the same shutter at lower gain keeps all
+            // the light and only adds headroom. A shorter shutter takes the
+            // rest. The preview ISO may exceed the manual maximum (AE digital
+            // gain), so the product, not the ISO, is matched.
+            const double target = double(baseExposureTimeNs) * double(sensitivity) * std::exp2(std::min(0.0f, ev));
+            const auto iso = static_cast<int32_t>(std::clamp<double>(
+                std::round(target / double(timeMax)), double(isoMin), double(isoMax)));
+            const int64_t time = std::clamp<int64_t>(std::llround(target / double(iso)), timeMin, timeMax);
+            exposures.push_back({time, iso});
+        }
+        return requests.captureBracket(deviceSession.session(), deviceSession.request(), deviceSession.callbackContext(),
+                                       control, exposures, requestId);
+    }
+
+    // Calibration is part of lens startup, before any preview is published.
+    SensitivityProbeStartup sensitivityStartup;
+    bool sensitivityCalibrationWanted = false;
+    bool sensitivityProbeEligibleLocked() const {
+        return sensitivityCalibrationWanted && deviceSession.sensorModeOverridden() &&
+               control.capabilities.manualExposureSupported && !control.videoMode && control.recordingFps <= 0;
+    }
+    bool probeSensitivityCoordinateLocked() {
+        if (!control.appliedExposureTimeNs || *control.appliedExposureTimeNs <= 0) return false;
+        const int64_t exposure =
+            std::clamp(*control.appliedExposureTimeNs, control.capabilities.exposureTimeMinNs,
+                       std::max(control.capabilities.exposureTimeMinNs, control.capabilities.exposureTimeMaxNs));
+        const auto& caps = control.capabilities;
+        // Geometric midpoint avoids the manual endpoints that can be clamped.
+        const int32_t probeIso = static_cast<int32_t>(std::llround(
+            std::sqrt(double(std::max(1, caps.sensitivityMin)) * double(std::max(1, caps.sensitivityMax)))));
+        const bool sent = requests.captureBracket(deviceSession.session(), deviceSession.request(),
+                                                  deviceSession.callbackContext(), control,
+                                                  {{exposure, probeIso}}, metadata::kSensitivityProbeRequestId);
+        diag(std::string("CAMERA_SENSITIVITY_PROBE sent=") + (sent ? "1" : "0") + " exposureNs=" +
+             std::to_string(exposure) + " iso=" + std::to_string(probeIso));
+        return sent;
+    }
+
+    void restartForSensitivityCalibrationLocked(std::unique_lock<std::mutex>& lock) {
+        if (!active || starting || !sensitivityStartup.finished() || !sensitivityProbeEligibleLocked() ||
+            results.sensitivityReportedPerRequest()) return;
+        // Enabling bracket mode after preview appeared must use a new startup,
+        // never insert a calibration flash into the running viewfinder.
+        active = false;
+        if (!retireSessionLocked(lock, kStopRetireTimeout, "CAMERA_CALIBRATION_RESTART")) {
+            forceRetireSessionLocked(lock, "CAMERA_CALIBRATION_RESTART");
+        }
+        teardownCameraResourcesLocked(lock);
+        active = true;
+        startLocked(lock);
+    }
+
     bool submitRepeatingLocked() {
         return requests.submit(deviceSession.session(), deviceSession.request(), deviceSession.callbackContext(),
                                control, meteringRequestLocked());
@@ -254,6 +333,7 @@ struct NativeCameraController::Impl final : CameraEventSink {
         }
         requests.retire();
         results.reset();
+        sensitivityStartup.reset();
         focusControls.reset(control);
         starting = true;
         const std::optional<LensRoute> selected =
@@ -475,6 +555,23 @@ struct NativeCameraController::Impl final : CameraEventSink {
             submitRepeatingLocked();
         }
         if (!actions.optimizedStill) steerAfToFacesLocked();
+        const auto& frame = *actions.frame;
+        const bool autoSettled = frame.aeMode > ACAMERA_CONTROL_AE_MODE_OFF &&
+            (frame.aeState == ACAMERA_CONTROL_AE_STATE_CONVERGED ||
+             frame.aeState == ACAMERA_CONTROL_AE_STATE_LOCKED ||
+             frame.aeState == ACAMERA_CONTROL_AE_STATE_FLASH_REQUIRED || frame.aeState < 0);
+        const bool wasReady = sensitivityStartup.finished();
+        const auto decision = sensitivityStartup.observe(frame, sensitivityProbeEligibleLocked(),
+            results.sensitivityReportedPerRequest().has_value(), autoSettled, SensitivityProbeStartup::Clock::now());
+        actions.frame->suppressPreview = decision.suppressPreview;
+        if (decision.requestProbe && !probeSensitivityCoordinateLocked()) sensitivityStartup.submissionFailed();
+        if (frame.optimizedStillRequestId == metadata::kSensitivityProbeRequestId)
+            diag("CAMERA_SENSITIVITY_PROBE_RESULT requested=" + std::to_string(frame.requestedSensitivity.value_or(0)) +
+                 " reported=" + std::to_string(frame.sensitivity) + " ratio=" +
+                 std::to_string(results.sensitivityReportedPerRequest().value_or(0.0)));
+        if (!wasReady && sensitivityStartup.finished())
+            diag("CAMERA_CALIBRATION_PREVIEW_READY timeout=" + std::to_string(sensitivityStartup.timedOut()) +
+                 " timestampNs=" + std::to_string(frame.timestampNs));
         if (focusControls.finishTrigger()) submitRepeatingLocked();
         lock.unlock();
         if (callbacks.submitMetadata) (void)callbacks.submitMetadata(*actions.frame);
@@ -650,7 +747,7 @@ struct NativeCameraController::Impl final : CameraEventSink {
                                               control.capabilities.exposureTimeMaxNs);
     }
     void setVideoModeValue(bool video, int fps) {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock<std::mutex> lock(mutex);
         const auto sanitizedFps = fps > 0 ? fps : 30;
         if (cadencePolicy.videoMode() == video && cadencePolicy.videoFps() == sanitizedFps) return;
         const bool enteringVideo = video && !cadencePolicy.videoMode();
@@ -661,6 +758,7 @@ struct NativeCameraController::Impl final : CameraEventSink {
         updatePreviewFloorLocked();
         applyHeldShutterLocked();
         submitRepeatingLocked();
+        if (!video) restartForSensitivityCalibrationLocked(lock);
     }
     void setShutterAngle(double degrees) {
         std::lock_guard<std::mutex> lock(mutex);
@@ -815,6 +913,16 @@ int NativeCameraController::videoRotationDegrees(int deviceRotationDegrees) cons
 bool NativeCameraController::setExposureMode(ExposureControlMode mode) { return impl_->setExposureModeValue(mode); }
 void NativeCameraController::setManualExposureTimeNs(int64_t value) { impl_->setManualExposure(value); }
 void NativeCameraController::setManualSensitivity(int32_t value) { impl_->setManualIso(value); }
+bool NativeCameraController::captureExposureBracket(uint64_t requestId, int64_t baseExposureTimeNs,
+                                                    int32_t baseReportedSensitivity, const std::vector<float>& evOffsets) {
+    return impl_->captureExposureBracket(requestId, baseExposureTimeNs, baseReportedSensitivity, evOffsets);
+}
+void NativeCameraController::setSensitivityCalibrationWanted(bool wanted) {
+    std::unique_lock<std::mutex> lock(impl_->mutex);
+    const bool changed = impl_->sensitivityCalibrationWanted != wanted;
+    impl_->sensitivityCalibrationWanted = wanted;
+    if (changed && wanted) impl_->restartForSensitivityCalibrationLocked(lock);
+}
 void NativeCameraController::setExposureCompensationSteps(int32_t value) { impl_->setEvSteps(value); }
 bool NativeCameraController::setWhiteBalanceMode(WhiteBalanceControlMode mode, int64_t requestId) {
     return impl_->setWhiteBalanceModeValue(mode, requestId);

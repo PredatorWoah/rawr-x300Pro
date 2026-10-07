@@ -1,6 +1,7 @@
 #include <rawr/raw_gpu_pipeline/HdrPlusRecorder.h>
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -18,7 +19,9 @@ std::string levelName(bool reference, std::size_t level) {
 
 struct PreparePc {
     float blackDelta[4];
+    float refBlack[4];
     std::int32_t padX, padY, width, height, paddedWidth, paddedHeight;
+    float gain;
 };
 // Push-constant structs mirror the GLSL blocks (ivec2 members are 8-byte aligned).
 struct HotPixelPc {
@@ -26,6 +29,10 @@ struct HotPixelPc {
 };
 struct SizePc {
     std::int32_t width, height;
+};
+struct AvgPoolPc {
+    std::int32_t width, height;
+    float clampTo;
 };
 struct BlurPc {
     std::int32_t width, height, srcX, srcY, dstX, dstY, kernelSize, stride, direction, quantizeHalf;
@@ -35,7 +42,7 @@ struct UpsamplePc {
     float scaleX, scaleY;
 };
 struct TileCostPc {
-    std::int32_t levelWidth, levelHeight, tilesX, tilesY, downscale, tileSize, useSsd;
+    std::int32_t levelWidth, levelHeight, tilesX, tilesY, downscale, tileSize, useSsd, exposureRatio;
 };
 struct BestTilePc {
     std::int32_t tilesX, tilesY, downscale;
@@ -118,7 +125,11 @@ void HdrPlusRecorder::recordPrepare(VkCommandBuffer c, bool reference, VkImageVi
                                     const RawNormalization& frame) {
     const auto& dst = arena_.image(reference ? "hdrp_ref_padded" : "hdrp_comp_padded");
     PreparePc pc{};
-    for (int i = 0; i < 4; ++i) pc.blackDelta[i] = reference_.blackByPhase[i] - frame.blackByPhase[i];
+    for (int i = 0; i < 4; ++i) {
+        pc.blackDelta[i] = reference_.blackByPhase[i] - frame.blackByPhase[i];
+        pc.refBlack[i] = reference_.blackByPhase[i];
+    }
+    pc.gain = reference ? 1.0f : companionGain_;
     pc.padX = std::int32_t(geometry_.padLeft);
     pc.padY = std::int32_t(geometry_.padTop);
     pc.width = std::int32_t(geometry_.width);
@@ -167,7 +178,7 @@ void HdrPlusRecorder::recordPyramid(VkCommandBuffer c, bool reference) {
                        1, true);
             src = &tmpB;
         }
-        SizePc pc{std::int32_t(level.width), std::int32_t(level.height)};
+        AvgPoolPc pc{std::int32_t(level.width), std::int32_t(level.height), i == 0 ? pyramidClamp_ : 0.0f};
         executor_.record(c, ShaderId::HdrpAvgPool, {{ib(0, *src), ib(1, dst)}, {}}, &pc, sizeof(pc),
                          divUp(level.width, 16), divUp(level.height, 16));
         computeWriteBarrier(c);
@@ -177,6 +188,7 @@ void HdrPlusRecorder::recordPyramid(VkCommandBuffer c, bool reference) {
 void HdrPlusRecorder::recordReference(VkCommandBuffer c, VkImageView rawU16, const RawNormalization& frame,
                                       std::uint32_t frameCount) {
     reference_ = frame;
+    pyramidClamp_ = 0.0f;
     recordPrepare(c, true, rawU16, frame);
     recordPyramid(c, true);
     const auto& padded = arena_.image("hdrp_ref_padded");
@@ -215,7 +227,13 @@ void HdrPlusRecorder::recordCompanionPadded(VkCommandBuffer c, VkImageView rawU1
 
 void HdrPlusRecorder::recordReferencePrepare(VkCommandBuffer c, VkImageView rawU16, const RawNormalization& frame) {
     reference_ = frame;
+    pyramidClamp_ = 0.0f;
     recordPrepare(c, true, rawU16, frame);
+    recordPyramid(c, true);
+}
+
+void HdrPlusRecorder::recordClampedReferencePyramid(VkCommandBuffer c, float clampTo) {
+    pyramidClamp_ = clampTo;
     recordPyramid(c, true);
 }
 
@@ -245,7 +263,8 @@ void HdrPlusRecorder::recordCompanionAlignLevel(VkCommandBuffer c, std::uint32_t
     const auto& refLevel = arena_.image(levelName(true, n));
     const auto& compLevel = arena_.image(levelName(false, n));
     TileCostPc tc{std::int32_t(level.width), std::int32_t(level.height), std::int32_t(level.tilesX),
-                  std::int32_t(level.tilesY), downscale, std::int32_t(level.tileSize), n != 0u ? 1 : 0};
+                  std::int32_t(level.tilesY), downscale, std::int32_t(level.tileSize), n != 0u ? 1 : 0,
+                  std::fabs(companionGain_ - 1.0f) > 1.0e-3f ? 1 : 0};
     executor_.record(c, ShaderId::HdrpCorrectUpsampling,
                      {{ib(0, refLevel), ib(1, compLevel)}, {bb(2, prev), bb(3, corrected)}}, &tc, sizeof(tc),
                      level.tilesX, level.tilesY);
@@ -328,10 +347,17 @@ struct WarpRgbaPc {
     std::int32_t alignPad;  // ivec2 offset is 8-byte aligned in the GLSL block
     std::int32_t offsetX, offsetY;
     std::int32_t continuous;
+    float exposureFactor, whiteLevel, blackLevelMean;
+    std::int32_t windowedSubstitute;
 };
 VkDeviceSize alignUp256(VkDeviceSize v) { return (v + 255u) / 256u * 256u; }
 struct MismatchPc {
     std::int32_t tilesX, tilesY, rgbaWidth, rgbaHeight;
+    float exposureFactor;
+};
+struct HighlightsPc {
+    std::int32_t tilesX, tilesY;
+    float exposureFactor, whiteLevel, blackLevelMean;
 };
 struct RegionPc {
     std::int32_t originX, originY, width, height;
@@ -343,6 +369,8 @@ struct MismatchNormPc {
 struct FreqMergePc {
     std::int32_t tilesX, tilesY;
     float robustnessNorm, readNoise, maxMotionNorm;
+    std::int32_t uniformExposure;
+    float frameWeight;
 };
 struct BackwardPc {
     std::int32_t tilesX, tilesY;
@@ -351,6 +379,9 @@ struct BackwardPc {
 struct BorderPc {
     std::int32_t width, height;
     float minValue;
+};
+struct NormalizePc {
+    std::int32_t width, height, multiply;
 };
 struct FreqAccumulatePc {
     std::int32_t width, height, offsetX, offsetY, mode;
@@ -387,6 +418,8 @@ ScratchLayout makeHdrPlusFrequencyScratchLayout(const hp::FrequencyGeometry& f, 
     add("hdrq_rms", tiles, PixelStorage::RGBA32Float, Lifetime::Burst);
     add("hdrq_mismatch", tiles, PixelStorage::R32Float, Lifetime::Companion);
     add("hdrq_total_mismatch", tiles, PixelStorage::R32Float, Lifetime::Output);
+    add("hdrq_highlights", tiles, PixelStorage::R32Float, Lifetime::Companion);
+    add("hdrq_weight_sum", rgba, PixelStorage::R32Float, Lifetime::Output);
     add("hdrp_accum", raw, PixelStorage::R32Float, Lifetime::Output);
     add("hdrp_output", raw, PixelStorage::RGBA16Float, Lifetime::Output);
     add("hdrp_cfa", raw, PixelStorage::R32Float, Lifetime::Output);
@@ -411,6 +444,16 @@ HdrPlusFrequencyRecorder::HdrPlusFrequencyRecorder(ResourceArena& arena, VulkanE
     : arena_(arena), executor_(executor), config_(config), geometry_(std::move(geometry)),
       align_(arena, executor, config, geometry_.align) {}
 
+void HdrPlusFrequencyRecorder::setExposure(std::vector<float> exposureFactors, std::vector<float> whiteLevels) {
+    if (!exposureFactors.empty() && whiteLevels.size() != exposureFactors.size())
+        throw std::invalid_argument("hdrplus frequency: exposure/white level count mismatch");
+    for (const float f : exposureFactors)
+        if (!(std::isfinite(f) && f > 0.0f)) throw std::invalid_argument("hdrplus frequency: invalid exposure factor");
+    uniformExposure_ = hp::uniformExposure(exposureFactors);
+    exposureFactors_ = uniformExposure_ ? std::vector<float>{} : std::move(exposureFactors);
+    whiteLevels_ = uniformExposure_ ? std::vector<float>{} : std::move(whiteLevels);
+}
+
 void HdrPlusFrequencyRecorder::beginPass(std::uint32_t pass) noexcept {
     pass_ = pass;
     // Align-once keeps every frame in the pass-0 padding; passOffset() maps.
@@ -431,6 +474,20 @@ VkDeviceSize HdrPlusFrequencyRecorder::alignSlotBytes() const noexcept {
 
 void HdrPlusFrequencyRecorder::recordCompanionAlign(VkCommandBuffer c, VkImageView rawU16, const RawNormalization& frame,
                                                     std::uint32_t slot) {
+    const float gain = 1.0f / frameExposure(slot);
+    align_.setCompanionGain(gain);
+    if (alignsThisPass() && brighterCompanion(slot) && !pyramidClamped_) {
+        // Brighter companions (merged after the dark ones) align against a
+        // reference pyramid clamped just below their clip point; theirs gets
+        // the same clamp. Assumes they share one exposure (the ZSL frames).
+        float refBlack = 0.0f, black = 0.0f;
+        for (int i = 0; i < 4; ++i) {
+            refBlack += 0.25f * align_.referenceBlack()[std::size_t(i)];
+            black += 0.25f * frame.blackByPhase[std::size_t(i)];
+        }
+        align_.recordClampedReferencePyramid(c, refBlack + 0.9f * (frame.whiteLevel - black) * gain);
+        pyramidClamped_ = true;
+    }
     if (!alignsThisPass()) {
         align_.recordCompanionPadded(c, rawU16, frame);
         return;
@@ -453,6 +510,8 @@ void HdrPlusFrequencyRecorder::recordCompanionAlign(VkCommandBuffer c, VkImageVi
 }
 
 void HdrPlusFrequencyRecorder::recordReference(VkCommandBuffer c, VkImageView rawU16, const RawNormalization& frame) {
+    substitutionReady_ = false;
+    pyramidClamped_ = false;
     if (pass_ == 0u) {
         executor_.record(c, ShaderId::HdrqShiftTable, {{}, {bb(0, arena_.buffer("hdrq_shift_table"))}}, nullptr, 0u,
                          divUp(49u * 64u, 64u), 1);
@@ -484,6 +543,12 @@ void HdrPlusFrequencyRecorder::recordReference(VkCommandBuffer c, VkImageView ra
     const VkClearColorValue zero{};
     const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     vkCmdClearColorImage(c, arena_.image("hdrq_total_mismatch").image, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &range);
+    // Bracketed merges seed each bin's weight sum with the reference's weight.
+    if (!uniformExposure_) {
+        VkClearColorValue one{};
+        one.float32[0] = 1.0f;
+        vkCmdClearColorImage(c, arena_.image("hdrq_weight_sum").image, VK_IMAGE_LAYOUT_GENERAL, &one, 1, &range);
+    }
     VkMemoryBarrier toCompute{VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_TRANSFER_WRITE_BIT,
                               VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT};
     vkCmdPipelineBarrier(c, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -499,10 +564,17 @@ void HdrPlusFrequencyRecorder::recordCompanionMerge(VkCommandBuffer c, std::uint
     const auto& alignedRgba = arena_.image("hdrq_aligned_rgba");
     const auto& mismatch = arena_.image("hdrq_mismatch");
     const auto offset = passOffset();
+    const float exposureFactor = frameExposure(slot);
+    const float whiteLevel = slot < whiteLevels_.size() ? whiteLevels_[slot] : 65535.0f;
+    float blackMean = 0.0f;
+    for (const float b : align_.referenceBlack()) blackMean += 0.25f * b;
     WarpRgbaPc wp{std::int32_t(geometry_.rgbaWidth), std::int32_t(geometry_.rgbaHeight), std::int32_t(geometry_.cropX),
                   std::int32_t(geometry_.cropY), std::int32_t(a.paddedWidth), std::int32_t(a.paddedHeight),
                   std::int32_t(level0.tilesX), std::int32_t(level0.tilesY), std::int32_t(level0.tileSize), 0,
-                  offset[0], offset[1], config_.frequencyAlignOnce ? 1 : 0};
+                  offset[0], offset[1], config_.frequencyAlignOnce ? 1 : 0, exposureFactor, whiteLevel, blackMean,
+                  substitutionReady_ ? 1 : 0};
+    // Clipped cells: the dark-frame estimate once captured, else the reference.
+    const auto& substitute = substitutionReady_ ? arena_.image("hdrq_out_rgba") : refRgba;
     // Align-once: this companion's pass-0 shifts from its store slot.
     const BufferBinding shifts =
         config_.frequencyAlignOnce
@@ -510,11 +582,12 @@ void HdrPlusFrequencyRecorder::recordCompanionMerge(VkCommandBuffer c, std::uint
                             VkDeviceSize(level0.tilesX) * level0.tilesY * 8u}
             : bb(2, arena_.buffer("hdrp_align_a"));
     executor_.record(c, ShaderId::HdrqWarpRgba,
-                     {{ib(0, arena_.image("hdrp_comp_padded")), ib(1, alignedRgba)}, {shifts}},
+                     {{ib(0, arena_.image("hdrp_comp_padded")), ib(1, alignedRgba), ib(3, substitute)}, {shifts}},
                      &wp, sizeof(wp), divUp(geometry_.rgbaWidth, 16), divUp(geometry_.rgbaHeight, 16));
     computeWriteBarrier(c);
     if (mark) mark(1u);
-    MismatchPc mp{std::int32_t(tx), std::int32_t(ty), std::int32_t(geometry_.rgbaWidth), std::int32_t(geometry_.rgbaHeight)};
+    MismatchPc mp{std::int32_t(tx), std::int32_t(ty), std::int32_t(geometry_.rgbaWidth), std::int32_t(geometry_.rgbaHeight),
+                  exposureFactor};
     executor_.record(c, ShaderId::HdrqMismatch,
                      {{ib(0, refRgba), ib(1, alignedRgba), ib(2, arena_.image("hdrq_rms")), ib(3, mismatch)}, {}}, &mp,
                      sizeof(mp), tx, ty);
@@ -542,14 +615,44 @@ void HdrPlusFrequencyRecorder::recordCompanionMerge(VkCommandBuffer c, std::uint
                      &np, sizeof(np), divUp(tx, 16), divUp(ty, 16));
     computeWriteBarrier(c);
     if (mark) mark(3u);
-    const auto norms = hp::frequencyNorms(config_.strength);
-    FreqMergePc fm{std::int32_t(tx), std::int32_t(ty), norms.robustnessNorm, norms.readNoise, norms.maxMotionNorm};
+    // Clipped-highlights factor per tile (all 1 for frames no brighter than the reference).
+    const auto& highlights = arena_.image("hdrq_highlights");
+    HighlightsPc hl{std::int32_t(tx), std::int32_t(ty), exposureFactor, whiteLevel, blackMean};
+    executor_.record(c, ShaderId::HdrqHighlightsNorm, {{ib(0, alignedRgba), ib(1, highlights)}, {}}, &hl, sizeof(hl),
+                     divUp(tx, 16), divUp(ty, 16));
+    computeWriteBarrier(c);
+    const auto norms = uniformExposure_ ? hp::frequencyNorms(config_.strength)
+                                        : hp::bracketedFrequencyNorms(config_.strength, exposureFactor);
+    FreqMergePc fm{std::int32_t(tx), std::int32_t(ty), norms.robustnessNorm, norms.readNoise, norms.maxMotionNorm,
+                   uniformExposure_ ? 1 : 0, exposureFactor};
     executor_.record(c, ShaderId::HdrqMerge,
                      {{ib(0, arena_.image("hdrq_ref_ft")), ib(1, arena_.image("hdrq_aligned_ft")),
-                       ib(2, arena_.image("hdrq_final_ft")), ib(3, arena_.image("hdrq_rms")), ib(4, mismatch)},
+                       ib(2, arena_.image("hdrq_final_ft")), ib(3, arena_.image("hdrq_rms")), ib(4, mismatch),
+                       ib(6, highlights), ib(7, arena_.image("hdrq_weight_sum"))},
                       {bb(5, arena_.buffer("hdrq_shift_table"))}},
                      &fm, sizeof(fm), tx, ty);
     computeWriteBarrier(c);
+}
+
+void HdrPlusFrequencyRecorder::recordSubstitutionSource(VkCommandBuffer c) {
+    if (uniformExposure_ || substitutionReady_) return;
+    // Weighted mean of the reference and the dark companions merged so far,
+    // inverse transformed into hdrq_out_rgba (free until recordPassFinish);
+    // the running spectrum is restored afterwards.
+    const auto& finalFt = arena_.image("hdrq_final_ft");
+    const auto& weights = arena_.image("hdrq_weight_sum");
+    const std::uint32_t gx = divUp(geometry_.rgbaWidth, 16), gy = divUp(geometry_.rgbaHeight, 16);
+    NormalizePc np{std::int32_t(geometry_.rgbaWidth), std::int32_t(geometry_.rgbaHeight), 0};
+    executor_.record(c, ShaderId::HdrqNormalize, {{ib(0, finalFt), ib(1, weights)}, {}}, &np, sizeof(np), gx, gy);
+    computeWriteBarrier(c);
+    BackwardPc bp{std::int32_t(geometry_.tilesX), std::int32_t(geometry_.tilesY), 1.0f};
+    executor_.record(c, ShaderId::HdrqBackwardDft, {{ib(0, finalFt), ib(1, arena_.image("hdrq_out_rgba"))}, {}}, &bp,
+                     sizeof(bp), geometry_.tilesX, geometry_.tilesY);
+    computeWriteBarrier(c);
+    np.multiply = 1;
+    executor_.record(c, ShaderId::HdrqNormalize, {{ib(0, finalFt), ib(1, weights)}, {}}, &np, sizeof(np), gx, gy);
+    computeWriteBarrier(c);
+    substitutionReady_ = true;
 }
 
 void HdrPlusFrequencyRecorder::recordPassFinish(VkCommandBuffer c, std::uint32_t frameCount) {
@@ -557,10 +660,17 @@ void HdrPlusFrequencyRecorder::recordPassFinish(VkCommandBuffer c, std::uint32_t
     const auto& finalFt = arena_.image("hdrq_final_ft");
     const auto& out = arena_.image("hdrq_out_rgba");
     TilesPc tp{std::int32_t(tx), std::int32_t(ty)};
+    if (!uniformExposure_) {
+        NormalizePc np{std::int32_t(geometry_.rgbaWidth), std::int32_t(geometry_.rgbaHeight), 0};
+        executor_.record(c, ShaderId::HdrqNormalize, {{ib(0, finalFt), ib(1, arena_.image("hdrq_weight_sum"))}, {}}, &np,
+                         sizeof(np), divUp(geometry_.rgbaWidth, 16), divUp(geometry_.rgbaHeight, 16));
+        computeWriteBarrier(c);
+    }
     executor_.record(c, ShaderId::HdrqDeconvolute, {{ib(0, finalFt), ib(1, arena_.image("hdrq_total_mismatch"))}, {}}, &tp,
                      sizeof(tp), tx, ty);
     computeWriteBarrier(c);
-    BackwardPc bp{std::int32_t(tx), std::int32_t(ty), float(frameCount)};
+    // Bracketed spectra are already a weighted mean (hdrq_normalize).
+    BackwardPc bp{std::int32_t(tx), std::int32_t(ty), uniformExposure_ ? float(frameCount) : 1.0f};
     executor_.record(c, ShaderId::HdrqBackwardDft, {{ib(0, finalFt), ib(1, out)}, {}}, &bp, sizeof(bp), tx, ty);
     computeWriteBarrier(c);
     // Exposure control off: upstream passes black level -1, so the clamp floor is -2 * window.

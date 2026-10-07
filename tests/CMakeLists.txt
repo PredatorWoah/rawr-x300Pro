@@ -55,6 +55,9 @@ rawr_test(camera_result_state_test
   "${RAWR_ROOT}/app/src/main/cpp/camera/WhiteBalanceMath.cpp"
   "${RAWR_ROOT}/app/src/main/cpp/color/WbDisplayEstimate.cpp"
   "${RAWR_ROOT}/app/src/main/cpp/color/ColorMath.cpp")
+rawr_test(sensitivity_probe_startup_test
+  "${RAWR_ROOT}/tests/native/sensitivity_probe_startup_test.cpp")
+
 rawr_test(camera_session_policy_test
   "${RAWR_ROOT}/tests/native/camera_session_policy_test.cpp")
 rawr_test(camera_video_facts_test
@@ -77,6 +80,8 @@ rawr_test(capture_job_test
 
 rawr_test(film_exposure_test
   "${RAWR_ROOT}/tests/native/film_exposure_test.cpp")
+rawr_test(bracket_exposure_test
+  "${RAWR_ROOT}/tests/native/bracket_exposure_test.cpp")
 rawr_test(film_scratch_estimate_test
   "${RAWR_ROOT}/tests/native/film_scratch_estimate_test.cpp")
 rawr_test(multiframe_exif_test
