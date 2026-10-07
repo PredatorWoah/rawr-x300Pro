@@ -166,8 +166,13 @@ std::string SessionEngine::videoStats() {
     const auto timing = realtime_.timing().snapshot();
     const auto& processing = videoSession_.activeProcessingConfig();
     const auto& reasons = realtime_.coordinator().videoDropReasons();
+    const uint64_t ingressDrops = videoIngressDrops_.load(std::memory_order_relaxed);
+    // Every camera frame that never reached the encoder, whatever the stage.
+    const uint64_t dropped = ingressDrops + reasons.noSlot + reasons.encoderBusy + reasons.presentFail +
+                             reasons.pairer + reasons.stale + reasons.submitFail + reasons.geometry;
     return std::string("{\"submitted\":") + std::to_string(realtime_.coordinator().videoSubmitted()) +
-           ",\"dropped\":" + std::to_string(realtime_.coordinator().videoDrops()) +
+           ",\"dropped\":" + std::to_string(dropped) +
+           ",\"ptsSource\":\"" + (videoSession_.stampsPresentTime() ? "sensor" : "queue") + "\"" +
            ",\"previewDropped\":" + std::to_string(timing.dropped) +
            ",\"previewSkippedDuringVideo\":" + std::to_string(realtime_.coordinator().previewSkippedDuringVideo()) +
            ",\"gpuMs\":" + std::to_string(timing.avgTotalGpuMs) +
@@ -181,10 +186,11 @@ std::string SessionEngine::videoStats() {
            ",\"defringeStrength\":" + std::to_string(processing.defringeStrength) +
            ",\"waveletDenoiseStrength\":" + std::to_string(processing.waveletDenoiseStrength) +
            ",\"processingRestartRequired\":" + (videoSession_.processingRestartRequired() ? "true" : "false") +
-           ",\"encoderSurfaceFormat\":\"" + videoSession_.outputFormatName() + "\"" + ",\"encoderSurfaceOffered\":\"" +
+           ",\"encoderSurfaceFormat\":\"" + videoSession_.outputFormatName() + "\"" +
+           ",\"rawStage\":\"" + videoSession_.rawStageMethod() + "\"" + ",\"encoderSurfaceOffered\":\"" +
            videoSession_.offeredFormats() + "\"" +
            ",\"encoderImages\":" + std::to_string(videoSession_.encoderImageCount()) +
-           ",\"dropReasons\":{\"ingress\":" + std::to_string(videoIngressDrops_.load(std::memory_order_relaxed)) +
+           ",\"dropReasons\":{\"ingress\":" + std::to_string(ingressDrops) +
            ",\"noSlot\":" + std::to_string(reasons.noSlot) + ",\"encoderBusy\":" + std::to_string(reasons.encoderBusy) +
            ",\"presentFail\":" + std::to_string(reasons.presentFail) + ",\"pairer\":" + std::to_string(reasons.pairer) +
            ",\"stale\":" + std::to_string(reasons.stale) + ",\"submitFail\":" + std::to_string(reasons.submitFail) +

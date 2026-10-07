@@ -21,10 +21,30 @@ The recorder's timestamp policy is selected at recording start through
 `NativeVideoRecorder.Settings.timestampPolicy`. Kotlin can enumerate
 `VideoTimestampPolicy.entries` and query
 `NativeVideoRecorder.supportedTimestampPolicies()` before showing a choice.
-`REALTIME` is supported: the Vulkan encoder Surface supplies video presentation
-times, retaining elapsed time through late or missing frames so audio keeps its
-normal timeline. This is **not** the RAW sensor timestamp; that timestamp is
-currently used for frame/metadata pairing and diagnostics. `FIXED_CADENCE_REPEAT`
-is reserved but unavailable until the native path can present a repeated frame
-for each missing cadence slot. Rewriting muxer timestamps without those frames
-would change playback speed relative to audio.
+`REALTIME` is supported: each encoder frame carries its RAW sensor timestamp
+(converted to `CLOCK_MONOTONIC`) through `VK_GOOGLE_display_timing`, so a late
+present keeps its capture time instead of leaving a gap. Drivers without the
+extension fall back to the queue time. `FIXED_CADENCE_REPEAT` is reserved but
+unavailable until the native path can present a repeated frame for each missing
+cadence slot. Rewriting muxer timestamps without those frames would change
+playback speed relative to audio.
+
+Recordings at half the sensor crop (1080p from the 3840x2160 crop) use two
+separable passes instead of a 2x2 box average. `video_downscale_h.comp`
+demosaics wide 4-row strips (shared MHC math in `video_mhc.glsl`, ~10% apron
+overhead) and filters them horizontally; `video_downscale_v.comp` filters
+vertically. Both work in white-balanced luma/chroma: luma with a Lanczos-3 cut
+at 0.87x the output Nyquist plus an anti-ringing clamp, chroma at half that
+bandwidth to match the encoder's 4:2:0 storage. On a Bayer zone plate this cuts
+aliasing (moire, stair-stepped edges) about 5x and false colour about 2x at
+slightly higher detail, for ~2.1x the box path's GPU time (6.1 vs 2.9 ms in
+the probe). About 3/4 of it is the strip pass, mostly the full-resolution
+demosaic that supersampling needs; intermediate-format and strip-shape
+changes measured no gain. `adb shell setprop debug.rawr.video_downscale box`
+restores the box average for A/B; the journal's `rawStage` records which one a
+recording used. The debug-only `VideoDownscaleProbeActivity` reruns the
+zone-plate comparison on device without the camera; with `--ez compile_check
+true` it instead reports `vkCreateComputePipelines` results for every `.spv` in
+`files/spv_check`, to bisect driver compiler rejections. (Adreno rejects a
+conditional store to the r16ui clip map in the strip pass, hence its
+unconditional store.)

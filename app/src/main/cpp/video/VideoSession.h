@@ -89,6 +89,7 @@ class VideoSession final {
     const std::string& offeredFormats() const noexcept { return output_.offeredFormats(); }
     const std::string& startTimingJson() const noexcept { return startTimingJson_; }
     const char* outputFormatName() const noexcept { return output_.outputFormatName(); }
+    const char* rawStageMethod() const noexcept { return resources_.rawStageMethod(); }
     VkImageView monitorView(uint32_t slot) const noexcept { return resources_.monitorView(slot); }
     VkImage monitorImage(uint32_t slot) const noexcept { return resources_.monitorImage(slot); }
     // Waits briefly for an encoder buffer; still none is a video drop. The
@@ -101,7 +102,9 @@ class VideoSession final {
                 bool monitorEnabled = true, const std::function<VkCommandBuffer(VkCommandBuffer)>& splitSubmit = {});
     VkSemaphore available(uint32_t frameSlot) const { return output_.available(frameSlot); }
     VkSemaphore rendered(uint32_t frameSlot) const { return output_.rendered(frameSlot); }
-    VkResult present(VkQueue queue, uint32_t frameSlot, uint32_t imageIndex);
+    VkResult present(VkQueue queue, uint32_t frameSlot, uint32_t imageIndex, uint64_t presentTimeNs);
+    bool stampsPresentTime() const noexcept { return output_.stampsPresentTime(); }
+    int64_t startedAtNs() const noexcept { return output_.startedAtNs(); }
     // Average GPU ms per recording stage since start(), as a JSON object.
     std::string stageTimingJson() const;
     // Brackets the viewfinder/scopes submission that reads the monitor image.

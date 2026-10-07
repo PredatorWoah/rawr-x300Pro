@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 
+#include "diagnostics/timing/RecentPeak.h"
 #include "imaging/FrameLimits.h"
 #include "post_demosaic/PostDemosaicProcessor.h"
 #include "video_pipeline/VideoDemosaic.h"
@@ -60,6 +61,7 @@ class VideoProcessingResources final {
     void updateRenderLut(const tonemap::lut::LutChain* renderLut, bool recording);
     bool hasProcessing(const ProcessingKey& key) const noexcept { return tonemap_ && processingKey_ == key; }
     void beginRecording();
+    const char* rawStageMethod() const noexcept { return demosaic_ ? demosaic_->method() : "none"; }
     VkImageView monitorView(uint32_t slot) const noexcept { return monitor_[slot].view; }
     VkImage monitorImage(uint32_t slot) const noexcept { return monitor_[slot].image; }
     void beginMonitorTiming(VkCommandBuffer command, uint32_t slot);
@@ -89,6 +91,7 @@ class VideoProcessingResources final {
     std::array<bool, rawrcam::imaging::kRealtimeFramesInFlight> stagePending_{};
     std::array<double, kStageCount> stageSumMs_{};
     uint64_t stageSamples_ = 0;
+    rawrcam::diagnostics::RecentPeak totalPeak_;
     double timestampPeriodNs_ = 1.0;
     rawrcam::vulkan::OwnedImage dummyMonitor_{};
     bool dummyMonitorInitialized_ = false;

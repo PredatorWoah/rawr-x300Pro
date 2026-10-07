@@ -54,6 +54,15 @@ class VideoDemosaic final {
     uint32_t cropX() const noexcept { return cropX_; }
     uint32_t cropY() const noexcept { return cropY_; }
     uint32_t sensorScale() const noexcept { return reduceCfa_ ? 2u : 1u; }
+    // Re-reads the 2x reduction filter at recording start. Debug A/B:
+    // `adb shell setprop debug.rawr.video_downscale box` restores the former
+    // 2x2 box average; anything else uses the anti-aliasing filter.
+    void selectDownscaleFilter();
+    void setAntiAlias(bool enabled) noexcept { antiAlias_ = enabled; }
+    const char* method() const noexcept {
+        if (!reduceCfa_) return "tiled_mhc_5x5";
+        return antiAlias_ ? "strip_mhc_lanczos3_2x+chroma420" : "tiled_mhc_fused_2x_area";
+    }
 
    private:
     struct HostBuffer {
@@ -64,6 +73,8 @@ class VideoDemosaic final {
     HostBuffer makeHostBuffer(VkDeviceSize bytes);
     void destroyHostBuffer(HostBuffer& buffer) noexcept;
     void destroy() noexcept;
+    void createDownscale();
+    void recordVertical(VkCommandBuffer command, uint32_t frameSlot, const Frame& frame);
 
     rawr::vk::GpuContext context_;
     uint32_t rawWidth_ = 0, rawHeight_ = 0;
@@ -81,5 +92,26 @@ class VideoDemosaic final {
     rawr::vk::OwnedImage dummyRaw_{};
     std::array<bool, kFramesInFlight> initialized_{};
     bool dummyInitialized_ = false;
+    // Anti-aliased 2x reduction in two separable passes. The strip pass
+    // demosaics wide 4-row strips and filters them horizontally into the
+    // half-width luma/chroma images (plus the clip state); the vertical pass
+    // filters those into outputs_. The intermediates are shared by all slots;
+    // a barrier orders each frame after the previous one's reads.
+    bool antiAlias_ = true;
+    static constexpr uint32_t kStripColumns = 128, kStripRows = 4, kRowApron = 16;
+    uint32_t stripHeight_ = 0;  // crop rows plus the apron above and below
+    rawr::vk::OwnedImage lumaChroma_{};
+    rawr::vk::OwnedImage lumaHigh_{};
+    bool stripImagesInitialized_ = false;
+    VkDescriptorSetLayout stripLayout_ = VK_NULL_HANDLE;
+    VkPipelineLayout stripPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline stripPipeline_ = VK_NULL_HANDLE;
+    VkDescriptorPool stripPool_ = VK_NULL_HANDLE;
+    std::array<VkDescriptorSet, kFramesInFlight> stripSets_{};
+    VkDescriptorSetLayout verticalLayout_ = VK_NULL_HANDLE;
+    VkPipelineLayout verticalPipelineLayout_ = VK_NULL_HANDLE;
+    VkPipeline verticalPipeline_ = VK_NULL_HANDLE;
+    VkDescriptorPool verticalPool_ = VK_NULL_HANDLE;
+    std::array<VkDescriptorSet, kFramesInFlight> verticalSets_{};
 };
 }  // namespace rawrcam::video
