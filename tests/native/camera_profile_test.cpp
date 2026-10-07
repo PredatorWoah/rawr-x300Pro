@@ -114,6 +114,11 @@ void testProfileMatching() {
     // X300 Pro (Dimensity 9500 / Mali): exact, tested model.
     m = matchBuiltInProfile(props({{"ro.product.model", "V2514"}}));
     assert(m.profileId == "vivo_x300_pro" && m.rule == "model" && m.verified);
+    // Chinese standard and satellite variants are recognized, but not device-tested.
+    for (const auto* model : {"V2502A", "V2502DA"}) {
+        m = matchBuiltInProfile(props({{"ro.product.model", model}}));
+        assert(m.profileId == "vivo_x300_pro" && m.rule == "model" && !m.verified);
+    }
     const auto pro = builtInCameraProfile("vivo_x300_pro");
     assert(pro.lenses.size() == 3);
     assert(routeForLens(pro, "UW")->cameraId == "4" && routeForLens(pro, "1x")->cameraId == "2");

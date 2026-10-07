@@ -4,7 +4,9 @@
   "version": 1,
   "match": {
     "models": [
-      "V2514"
+      "V2514",
+      "V2502A",
+      "V2502DA"
     ],
     "verifiedModels": [
       "V2514"
