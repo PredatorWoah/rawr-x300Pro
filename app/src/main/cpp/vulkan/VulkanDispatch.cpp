@@ -3,7 +3,6 @@
 #include <adrenotools/driver.h>
 #include <android/log.h>
 #include <dlfcn.h>
-#include <sys/system_properties.h>
 
 #include <mutex>
 #include <stdexcept>
@@ -289,24 +288,15 @@ void releasePipelineCache(VkDevice device) {
         gCacheDevice = VK_NULL_HANDLE;
     }
 }
-// libadrenotools only knows how to replace the Qualcomm Adreno ICD. Android names the
-// platform Vulkan driver in ro.hardware.vulkan ("adreno" on Snapdragon, "mali" on
-// MediaTek Mali/Immortalis), so a custom driver request is honoured only on Adreno.
-bool platformIsAdreno() {
-    char value[PROP_VALUE_MAX] = {};
-    __system_property_get("ro.hardware.vulkan", value);
-    return std::string(value) == "adreno";
-}
 void configure(const std::string& nativeLibraryDir, const std::string& path) {
     std::lock_guard<std::mutex> lock(gMu);
     if (gLib) return;
     clearFns();
     const bool requested = !path.empty();
-    if (requested && !platformIsAdreno()) {
-        gDesc = "system (custom driver ignored: platform Vulkan driver is not Adreno)";
-        __android_log_print(ANDROID_LOG_WARN, "RawrCamNative",
-                            "GPU_DRIVER_SKIPPED loader=adrenotools reason=non_adreno_platform path=%s", path.c_str());
-    } else if (requested) {
+    // RawPreviewCoordinator only supplies a custom path when GpuPlatform supports
+    // it, using the same check as the settings UI. Do not gate on
+    // ro.hardware.vulkan here: Android can resolve the ICD via ro.board.platform.
+    if (requested) {
         const auto slash = path.find_last_of('/');
         if (slash == std::string::npos || slash + 1 >= path.size() || nativeLibraryDir.empty()) {
             gDesc = "system (custom bootstrap invalid path)";
